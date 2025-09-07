@@ -47,6 +47,34 @@
         overflow-y: auto;
         line-height: 1.4;
     }
+    
+    /* Dark theme accordion styling */
+    .accordion-item {
+        background: var(--bg-secondary);
+        border: 1px solid var(--bg-tertiary);
+    }
+    
+    .accordion-button {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: none;
+    }
+    
+    .accordion-button:not(.collapsed) {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        box-shadow: none;
+    }
+    
+    .accordion-button:focus {
+        box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
+        border-color: var(--purple-primary);
+    }
+    
+    .accordion-body {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
 </style>
 {% endblock %}
 
