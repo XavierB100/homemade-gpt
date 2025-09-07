@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Manage Models - HomeMade GPT{% endblock %}
+{% block title %}Model Database - Homemade GPT{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <h1 class="text-center mb-4">
-            <i class="bi bi-cpu-fill feature-icon d-block"></i>
-            Manage Your Models
+            <i class="bi bi-database feature-icon d-block"></i>
+            Model Database
         </h1>
-        <p class="text-center text-muted mb-5">
-            View, organize, and manage all your trained AI models in one place.
+        <p class="text-center mb-5" style="color: var(--text-secondary);">
+            Manage trained neural network models and monitor performance metrics.
         </p>
     </div>
 </div>
@@ -19,40 +19,52 @@
 <!-- Stats Overview -->
 <div class="row mb-4">
     <div class="col-md-3 mb-3">
-        <div class="card text-center">
+        <div class="card text-center" style="border: 1px solid var(--purple-primary);">
             <div class="card-body">
-                <h3 class="text-primary">{{ models|length }}</h3>
-                <small class="text-muted">Total Models</small>
+                <div class="mb-2">
+                    <i class="bi bi-layers" style="font-size: 1.5rem; color: var(--purple-primary);"></i>
+                </div>
+                <h3 style="color: var(--purple-primary); font-family: 'JetBrains Mono', monospace;">{{ models|length }}</h3>
+                <small style="color: var(--text-muted);">Total Models</small>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="card text-center">
+        <div class="card text-center" style="border: 1px solid var(--green-primary);">
             <div class="card-body">
-                <h3 class="text-success">
-                    {{ "%.1f"|format((models|sum(attribute='size') / 1024 / 1024)) }} MB
+                <div class="mb-2">
+                    <i class="bi bi-hdd" style="font-size: 1.5rem; color: var(--green-primary);"></i>
+                </div>
+                <h3 style="color: var(--green-primary); font-family: 'JetBrains Mono', monospace;">
+                    {{ "%.1f"|format((models|sum(attribute='size') / 1024 / 1024)) }}MB
                 </h3>
-                <small class="text-muted">Total Size</small>
+                <small style="color: var(--text-muted);">Storage Used</small>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="card text-center">
+        <div class="card text-center" style="border: 1px solid var(--cyan-primary);">
             <div class="card-body">
-                <h3 class="text-info">
+                <div class="mb-2">
+                    <i class="bi bi-check-circle" style="font-size: 1.5rem; color: var(--cyan-primary);"></i>
+                </div>
+                <h3 style="color: var(--cyan-primary); font-family: 'JetBrains Mono', monospace;">
                     {{ models|rejectattr('params', 'equalto', 'Error')|list|length }}
                 </h3>
-                <small class="text-muted">Working Models</small>
+                <small style="color: var(--text-muted);">Active Models</small>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="card text-center">
+        <div class="card text-center" style="border: 1px solid var(--red-primary);">
             <div class="card-body">
-                <h3 class="text-warning">
+                <div class="mb-2">
+                    <i class="bi bi-x-circle" style="font-size: 1.5rem; color: var(--red-primary);"></i>
+                </div>
+                <h3 style="color: var(--red-primary); font-family: 'JetBrains Mono', monospace;">
                     {{ models|selectattr('params', 'equalto', 'Error')|list|length }}
                 </h3>
-                <small class="text-muted">Error Models</small>
+                <small style="color: var(--text-muted);">Failed Models</small>
             </div>
         </div>
     </div>
@@ -65,7 +77,7 @@
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="mb-0">
-                    <i class="bi bi-robot"></i> {{ model.name }}
+                    <i class="bi bi-brain"></i> <code>{{ model.name }}</code>
                 </h6>
                 {% if model.params != 'Error' %}
                 <span class="badge bg-primary">{{ model.params }}</span>
@@ -77,24 +89,24 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-6">
-                        <small class="text-muted">Modified</small><br>
-                        <span class="fw-bold">{{ model.modified }}</span>
+                        <small style="color: var(--text-muted);">Last Modified</small><br>
+                        <span style="color: var(--text-primary); font-weight: 500;">{{ model.modified }}</span>
                     </div>
                     <div class="col-6">
-                        <small class="text-muted">File Size</small><br>
-                        <span class="fw-bold">{{ "%.1f"|format(model.size / 1024 / 1024) }} MB</span>
+                        <small style="color: var(--text-muted);">Model Size</small><br>
+                        <span style="color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace;">{{ "%.1f"|format(model.size / 1024 / 1024) }}MB</span>
                     </div>
                 </div>
                 
                 {% if model.params != 'Error' %}
                 <div class="row mb-3">
                     <div class="col-6">
-                        <small class="text-muted">Vocabulary</small><br>
-                        <span class="fw-bold">{{ model.vocab_size }}</span>
+                        <small style="color: var(--text-muted);">Vocabulary Size</small><br>
+                        <span style="color: var(--cyan-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace;">{{ model.vocab_size }}</span>
                     </div>
                     <div class="col-6">
-                        <small class="text-muted">Parameters</small><br>
-                        <span class="fw-bold">{{ model.params }}</span>
+                        <small style="color: var(--text-muted);">Parameters</small><br>
+                        <span style="color: var(--purple-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace;">{{ model.params }}</span>
                     </div>
                 </div>
                 {% else %}
@@ -104,8 +116,8 @@
                 {% endif %}
                 
                 <div class="mb-2">
-                    <small class="text-muted">File Path</small><br>
-                    <code class="small">{{ model.file }}</code>
+                    <small style="color: var(--text-muted);">Model File</small><br>
+                    <code class="small" style="color: var(--green-primary); background: var(--bg-primary); padding: 2px 6px; border-radius: 4px;">{{ model.file }}</code>
                 </div>
             </div>
             
@@ -113,8 +125,8 @@
                 <div class="d-flex gap-2 flex-wrap">
                     {% if model.params != 'Error' %}
                     <a href="{{ url_for('chat_page') }}?model={{ model.file }}" 
-                       class="btn btn-success btn-sm flex-fill">
-                        <i class="bi bi-chat-dots"></i> Chat
+                       class="btn btn-success-gradient btn-sm flex-fill">
+                        <i class="bi bi-terminal"></i> Generate
                     </a>
                     {% endif %}
                     
@@ -138,10 +150,10 @@
 <div class="row mt-4">
     <div class="col-12 text-center">
         <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg me-3">
-            <i class="bi bi-plus-circle"></i> Train New Model
+            <i class="bi bi-cpu"></i> Train New Model
         </a>
-        <button class="btn btn-outline-warning btn-lg" onclick="cleanupModels()">
-            <i class="bi bi-trash3"></i> Cleanup Errors
+        <button class="btn btn-warning-gradient btn-lg" onclick="cleanupModels()">
+            <i class="bi bi-gear"></i> Cleanup Failed
         </button>
     </div>
 </div>
@@ -152,13 +164,13 @@
     <div class="col-12">
         <div class="card text-center">
             <div class="card-body py-5">
-                <i class="bi bi-cpu" style="font-size: 4rem; color: #6c757d; margin-bottom: 20px;"></i>
-                <h4>No Models Found</h4>
-                <p class="text-muted mb-4">
-                    You haven't trained any models yet. Start by uploading some text data and training your first AI model!
+                <i class="bi bi-database" style="font-size: 4rem; color: var(--text-muted); margin-bottom: 20px;"></i>
+                <h4 style="color: var(--text-primary);">Model Database Empty</h4>
+                <p style="color: var(--text-secondary);" class="mb-4">
+                    No trained neural network models found. Begin by training your first model on custom text data.
                 </p>
                 <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
-                    <i class="bi bi-plus-circle"></i> Train Your First Model
+                    <i class="bi bi-play-fill"></i> Start Training
                 </a>
             </div>
         </div>

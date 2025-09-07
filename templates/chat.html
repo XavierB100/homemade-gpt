@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with AI - HomeMade GPT{% endblock %}
+{% block title %}Text Generation Interface - Homemade GPT{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <h1 class="text-center mb-4">
-            <i class="bi bi-chat-dots-fill feature-icon d-block"></i>
-            Chat with Your AI
+            <i class="bi bi-terminal feature-icon d-block"></i>
+            Text Generation Interface
         </h1>
-        <p class="text-center text-muted mb-5">
-            Select a trained model and start chatting! Adjust creativity and response length as needed.
+        <p class="text-center mb-5" style="color: var(--text-secondary);">
+            Select a trained model and experiment with text generation. Configure sampling parameters as needed.
         </p>
     </div>
 </div>
@@ -22,7 +22,7 @@
         <div class="card sticky-top" style="top: 100px;">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="bi bi-cpu"></i> Select Model
+                    <i class="bi bi-brain"></i> Model Selection
                 </h6>
             </div>
             <div class="card-body">
@@ -45,23 +45,24 @@
                 </div>
                 
                 <!-- Generation Settings -->
-                <h6 class="mt-3 mb-2">Generation Settings</h6>
+                <h6 class="mt-3 mb-2" style="color: var(--text-primary);">Sampling Parameters</h6>
                 
                 <div class="mb-3">
                     <label for="temperature" class="form-label">
-                        Creativity: <span id="tempValue">0.8</span>
+                        Temperature: <span id="tempValue" style="color: var(--purple-primary);">0.8</span>
                     </label>
                     <input type="range" class="form-range" id="temperature" 
                            min="0.1" max="2.0" step="0.1" value="0.8">
-                    <small class="text-muted">Lower = more focused, Higher = more creative</small>
+                    <small style="color: var(--text-muted);">Lower = more deterministic, Higher = more random</small>
                 </div>
                 
                 <div class="mb-3">
                     <label for="maxLength" class="form-label">
-                        Response Length: <span id="lengthValue">200</span>
+                        Max Length: <span id="lengthValue" style="color: var(--cyan-primary);">200</span>
                     </label>
                     <input type="range" class="form-range" id="maxLength" 
                            min="50" max="500" step="25" value="200">
+                    <small style="color: var(--text-muted);">Maximum tokens to generate</small>
                 </div>
                 
                 <!-- Chat Controls -->
@@ -83,9 +84,9 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <h6 class="mb-0">
-                        <i class="bi bi-robot"></i> AI Chat
+                        <i class="bi bi-code-slash"></i> Generation Output
                     </h6>
-                    <small class="text-muted" id="chatStatus">Select a model to start chatting</small>
+                    <small style="color: var(--text-muted);" id="chatStatus">Select a model to start generating</small>
                 </div>
                 <div>
                     <span class="badge bg-success d-none" id="modelStatus">Ready</span>
@@ -94,10 +95,10 @@
             
             <div class="chat-container" id="chatContainer">
                 <div class="text-center py-5" id="welcomeMessage">
-                    <i class="bi bi-robot" style="font-size: 4rem; color: #667eea; margin-bottom: 20px;"></i>
-                    <h5>Welcome to HomeMade GPT Chat!</h5>
-                    <p class="text-muted">
-                        Select a trained model from the sidebar and start chatting with your custom AI.
+                    <i class="bi bi-cpu" style="font-size: 4rem; color: var(--purple-primary); margin-bottom: 20px;"></i>
+                    <h5 style="color: var(--text-primary);">Text Generation Interface</h5>
+                    <p style="color: var(--text-secondary);">
+                        Select a trained model from the sidebar and experiment with text generation.
                     </p>
                 </div>
                 
@@ -138,13 +139,13 @@
     <div class="col-12">
         <div class="card text-center">
             <div class="card-body py-5">
-                <i class="bi bi-exclamation-triangle" style="font-size: 4rem; color: #ffc107; margin-bottom: 20px;"></i>
-                <h4>No Trained Models Available</h4>
-                <p class="text-muted mb-4">
-                    You need to train at least one model before you can start chatting.
+                <i class="bi bi-info-circle" style="font-size: 4rem; color: var(--cyan-primary); margin-bottom: 20px;"></i>
+                <h4 style="color: var(--text-primary);">No Models Available</h4>
+                <p style="color: var(--text-secondary);" class="mb-4">
+                    Train a neural network model first to enable text generation.
                 </p>
                 <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
-                    <i class="bi bi-plus-circle"></i> Train Your First Model
+                    <i class="bi bi-play-fill"></i> Start Training
                 </a>
             </div>
         </div>
@@ -220,7 +221,7 @@ function selectModel(modelPath, modelName) {
     document.getElementById('modelInfo').classList.remove('d-none');
     document.getElementById('modelName').textContent = modelName;
     document.getElementById('modelDetails').textContent = `Path: ${modelPath}`;
-    document.getElementById('chatStatus').textContent = 'Model loaded - Ready to chat!';
+    document.getElementById('chatStatus').textContent = 'Model loaded - Ready for generation';
     document.getElementById('modelStatus').classList.remove('d-none');
     
     // Enable chat input
@@ -235,7 +236,7 @@ function selectModel(modelPath, modelName) {
     document.getElementById('welcomeMessage').style.display = 'none';
     
     // Show welcome chat message
-    addMessage('assistant', `👋 Hi! I'm your custom AI trained on your data. What would you like to talk about?`);
+    addMessage('assistant', `🦾 Neural network loaded. Enter a prompt to begin text generation.`);
 }
 
 function deselectModel() {
@@ -243,7 +244,7 @@ function deselectModel() {
     
     // Update UI
     document.getElementById('modelInfo').classList.add('d-none');
-    document.getElementById('chatStatus').textContent = 'Select a model to start chatting';
+    document.getElementById('chatStatus').textContent = 'Select a model to start generating';
     document.getElementById('modelStatus').classList.add('d-none');
     
     // Disable chat input

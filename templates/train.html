@@ -1,29 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}Train Your Model - HomeMade GPT{% endblock %}
+{% block title %}Neural Network Training - Homemade GPT{% endblock %}
 
 {% block extra_head %}
 <style>
     .upload-zone {
-        border: 3px dashed #667eea;
-        border-radius: 20px;
+        border: 2px dashed var(--purple-primary);
+        border-radius: 12px;
         padding: 40px;
         text-align: center;
-        background: rgba(102, 126, 234, 0.05);
+        background: rgba(99, 102, 241, 0.05);
         transition: all 0.3s ease;
+        color: var(--text-primary);
     }
     
     .upload-zone.dragover {
-        border-color: #38ef7d;
-        background: rgba(56, 239, 125, 0.1);
-        transform: scale(1.02);
+        border-color: var(--green-primary);
+        background: rgba(16, 185, 129, 0.1);
+        transform: scale(1.01);
     }
     
     .file-info {
-        background: rgba(56, 239, 125, 0.1);
-        border-radius: 15px;
+        background: rgba(16, 185, 129, 0.1);
+        border-radius: 8px;
         padding: 20px;
-        border: 2px solid #38ef7d;
+        border: 1px solid var(--green-primary);
     }
     
     .training-progress {
@@ -35,14 +36,16 @@
     }
     
     .training-logs {
-        background: #1a1a1a;
-        color: #00ff00;
-        border-radius: 10px;
+        background: var(--bg-primary);
+        color: var(--green-primary);
+        border: 1px solid var(--bg-tertiary);
+        border-radius: 8px;
         padding: 20px;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        font-size: 13px;
         height: 300px;
         overflow-y: auto;
+        line-height: 1.4;
     }
 </style>
 {% endblock %}
@@ -51,11 +54,11 @@
 <div class="row">
     <div class="col-12">
         <h1 class="text-center mb-4">
-            <i class="bi bi-mortarboard-fill feature-icon d-block"></i>
-            Train Your AI Model
+            <i class="bi bi-cpu feature-icon d-block"></i>
+            Neural Network Training
         </h1>
-        <p class="text-center text-muted mb-5">
-            Upload your text data and train a custom AI model. Supports books, WhatsApp chats, and any text format!
+        <p class="text-center mb-5" style="color: var(--text-secondary);">
+            Configure and train transformer models on custom text data. Monitor training progress in real-time.
         </p>
     </div>
 </div>
@@ -71,13 +74,13 @@
             </div>
             <div class="card-body">
                 <div class="upload-zone" id="uploadZone">
-                    <i class="bi bi-file-earmark-text" style="font-size: 3rem; color: #667eea; margin-bottom: 20px;"></i>
-                    <h5>Drop your text file here</h5>
-                    <p class="text-muted mb-3">
-                        Or click to browse files. Supports .txt files up to 16MB.
+                    <i class="bi bi-file-earmark-text" style="font-size: 3rem; color: var(--purple-primary); margin-bottom: 20px;"></i>
+                    <h5 style="color: var(--text-primary);">Upload Training Data</h5>
+                    <p style="color: var(--text-secondary);" class="mb-3">
+                        Drop text files here or click to browse. Supports .txt files up to 16MB.
                     </p>
                     <button type="button" class="btn btn-gradient" onclick="document.getElementById('fileInput').click()">
-                        <i class="bi bi-folder2-open"></i> Choose File
+                        <i class="bi bi-upload"></i> Select File
                     </button>
                     <input type="file" id="fileInput" accept=".txt" style="display: none;">
                 </div>
@@ -220,8 +223,8 @@
                 <!-- Progress Bar -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-2">
-                        <span>Progress</span>
-                        <span id="progressText">0%</span>
+                        <span style="color: var(--text-primary);">Progress</span>
+                        <span id="progressText" style="color: var(--text-primary);">0%</span>
                     </div>
                     <div class="progress">
                         <div class="progress-bar" id="progressBar" style="width: 0%"></div>
@@ -232,26 +235,26 @@
                 <div class="row mb-3">
                     <div class="col-md-3">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="currentIteration">0</div>
-                            <small class="text-muted">Iteration</small>
+                            <div class="h4 mb-0" id="currentIteration" style="color: var(--text-primary);">0</div>
+                            <small style="color: var(--text-muted);">Iteration</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="currentLoss">0.000</div>
-                            <small class="text-muted">Current Loss</small>
+                            <div class="h4 mb-0" id="currentLoss" style="color: var(--text-primary);">0.000</div>
+                            <small style="color: var(--text-muted);">Current Loss</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="bestLoss">0.000</div>
-                            <small class="text-muted">Best Loss</small>
+                            <div class="h4 mb-0" id="bestLoss" style="color: var(--text-primary);">0.000</div>
+                            <small style="color: var(--text-muted);">Best Loss</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="learningRateDisplay">0.000</div>
-                            <small class="text-muted">Learning Rate</small>
+                            <div class="h4 mb-0" id="learningRateDisplay" style="color: var(--text-primary);">0.000</div>
+                            <small style="color: var(--text-muted);">Learning Rate</small>
                         </div>
                     </div>
                 </div>
@@ -277,16 +280,16 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>📚 For Books/Novels:</h6>
-                        <ul class="text-muted">
+                        <h6 style="color: var(--text-primary);">📚 For Books/Novels:</h6>
+                        <ul style="color: var(--text-secondary);">
                             <li>Use at least 1MB of text (short book)</li>
                             <li>Recommended: Small or Medium model</li>
                             <li>Training iterations: 5000-10000</li>
                         </ul>
                     </div>
                     <div class="col-md-6">
-                        <h6>💬 For WhatsApp Chats:</h6>
-                        <ul class="text-muted">
+                        <h6 style="color: var(--text-primary);">💬 For WhatsApp Chats:</h6>
+                        <ul style="color: var(--text-secondary);">
                             <li>Export chat without media</li>
                             <li>Recommended: Tiny or Small model</li>
                             <li>Training iterations: 2000-5000</li>
