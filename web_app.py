@@ -457,22 +457,11 @@ def handle_status_request():
     emit('training_status', training_status)
 
 if __name__ == '__main__':
-    # Get port from environment variable (Render/Railway) or default to 5000
-    port = int(os.environ.get('PORT', 5000))
-    
     print("🚀 Starting Enhanced HomeMade GPT Web Interface...")
-    print(f"🌐 Server will run on port: {port}")
-    print("📱 The interface is mobile-friendly!")
+    print("🌐 Server running on: http://127.0.0.1:5000")
     print("🤖 Upload text files to train custom AI models")
     print("💬 Chat with your trained models")
     print("\nPress Ctrl+C to stop the server")
     
-    # Production deployment settings for Render/Railway
-    is_production = os.environ.get('RENDER') or os.environ.get('PORT')
-    
-    if is_production:
-        # Production mode with unsafe werkzeug allowed for deployment
-        socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
-    else:
-        # Development mode
-        socketio.run(app, debug=True, host='0.0.0.0', port=port)
+    # Local development mode
+    socketio.run(app, debug=True, host='127.0.0.1', port=5000)
