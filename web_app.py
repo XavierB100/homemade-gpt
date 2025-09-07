@@ -20,6 +20,32 @@ from src.training.data_loader import DataProcessor
 from src.models.enhanced_gpt import GPT, GPTConfig
 from src.chat.chat import ChatBot
 
+# Enhanced logging system
+def log_activity(message, level="INFO", user_action=False):
+    """Comprehensive activity logging with timestamps and emojis"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    icons = {
+        "INFO": "ℹ️",
+        "SUCCESS": "✅", 
+        "WARNING": "⚠️",
+        "ERROR": "❌",
+        "USER": "👤",
+        "MODEL": "🤖",
+        "UPLOAD": "📤",
+        "DOWNLOAD": "📥",
+        "TRAIN": "🏋️",
+        "CHAT": "💬",
+        "PAGE": "📄"
+    }
+    icon = icons.get(level, "📝")
+    print(f"[{timestamp}] {icon} {message}")
+    
+    # Also log to file if needed
+    if user_action or level in ["ERROR", "WARNING"]:
+        log_file = Path('logs') / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"[{datetime.now().isoformat()}] {level}: {message}\n")
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'homemade-gpt-secret-key'
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -131,29 +157,43 @@ def get_available_models():
 @app.route('/')
 def index():
     """Main homepage"""
+    client_ip = request.remote_addr
+    log_activity(f"User visited homepage from {client_ip}", "PAGE", user_action=True)
     models = get_available_models()
+    log_activity(f"Loaded {len(models)} available models for homepage", "MODEL")
     return render_template('index.html', models=models)
 
 @app.route('/train')
 def train_page():
     """Training interface page"""
+    client_ip = request.remote_addr
+    log_activity(f"User accessed training interface from {client_ip}", "TRAIN", user_action=True)
     return render_template('train.html')
 
 @app.route('/chat')
 def chat_page():
     """Chat interface page"""
+    client_ip = request.remote_addr
+    log_activity(f"User opened chat interface from {client_ip}", "CHAT", user_action=True)
     models = get_available_models()
+    log_activity(f"Loaded {len(models)} models for chat interface", "MODEL")
     return render_template('chat.html', models=models)
 
 @app.route('/models')
 def models_page():
     """Model management page"""
+    client_ip = request.remote_addr
+    log_activity(f"User accessed model management from {client_ip}", "MODEL", user_action=True)
     models = get_available_models()
+    log_activity(f"Displaying {len(models)} available models", "MODEL")
     return render_template('models.html', models=models)
 
 @app.route('/about')
 def about_page():
     """About page - comprehensive project explanation"""
+    client_ip = request.remote_addr
+    log_activity(f"User viewed about page from {client_ip}", "PAGE", user_action=True)
+    
     # Get system info for the about page
     import torch
     import sys
@@ -168,20 +208,28 @@ def about_page():
         'project_size': sum(f.stat().st_size for f in Path('.').rglob('*.py') if f.is_file()) / 1024 / 1024
     }
     
+    log_activity("Generated system information for about page", "INFO")
     return render_template('about.html', system_info=system_info)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload for training"""
+    client_ip = request.remote_addr
+    log_activity(f"File upload initiated from {client_ip}", "UPLOAD", user_action=True)
+    
     if 'file' not in request.files:
+        log_activity("Upload failed: No file in request", "ERROR")
         return jsonify({'success': False, 'message': 'No file selected'})
     
     file = request.files['file']
     if file.filename == '':
+        log_activity("Upload failed: Empty filename", "ERROR")
         return jsonify({'success': False, 'message': 'No file selected'})
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
+        log_activity(f"Processing upload: {filename}", "UPLOAD")
+        
         # Add timestamp to filename to avoid conflicts
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         name, ext = os.path.splitext(filename)
@@ -189,9 +237,11 @@ def upload_file():
         
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
+        log_activity(f"File saved as: {filename}", "SUCCESS")
         
         # Analyze the file
         try:
+            log_activity(f"Analyzing uploaded file: {filename}", "INFO")
             processor = DataProcessor()
             text, metadata = processor.load_and_process_data(file_path, 'auto')
             
