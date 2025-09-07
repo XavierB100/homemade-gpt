@@ -17,8 +17,8 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from data_loader import DataProcessor
-from enhanced_gpt import GPT, GPTConfig
+from .data_loader import DataProcessor
+from ..models.enhanced_gpt import GPT, GPTConfig
 
 def get_batch(data, batch_size, block_size, device):
     """Generate a small batch of data of inputs x and targets y"""

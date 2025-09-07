@@ -16,9 +16,9 @@ from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 
 # Import our HomeMade GPT modules
-from data_loader import DataProcessor
-from enhanced_gpt import GPT, GPTConfig
-from chat import ChatBot
+from src.training.data_loader import DataProcessor
+from src.models.enhanced_gpt import GPT, GPTConfig
+from src.chat.chat import ChatBot
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'homemade-gpt-secret-key'
@@ -54,12 +54,28 @@ def get_available_models():
     models = []
     models_dir = Path('models')
     
+    # Add backward compatibility for old models
+    import sys
+    from types import ModuleType
+    
+    # Create fake modules for old imports
+    if 'enhanced_gpt' not in sys.modules:
+        enhanced_gpt_module = ModuleType('enhanced_gpt')
+        enhanced_gpt_module.GPT = GPT
+        enhanced_gpt_module.GPTConfig = GPTConfig
+        sys.modules['enhanced_gpt'] = enhanced_gpt_module
+    
+    if 'data_loader' not in sys.modules:
+        data_loader_module = ModuleType('data_loader')
+        data_loader_module.DataProcessor = DataProcessor
+        sys.modules['data_loader'] = data_loader_module
+    
     for model_file in models_dir.glob('*.pt'):
         if model_file.name in ['ckpt.pt', 'final_model.pt']:
             continue
             
         try:
-            # Try to load model info
+            # Try to load model info with backward compatibility
             checkpoint = torch.load(model_file, map_location='cpu', weights_only=False)
             
             model_info = {
@@ -135,6 +151,25 @@ def models_page():
     models = get_available_models()
     return render_template('models.html', models=models)
 
+@app.route('/about')
+def about_page():
+    """About page - comprehensive project explanation"""
+    # Get system info for the about page
+    import torch
+    import sys
+    from pathlib import Path
+    
+    system_info = {
+        'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        'pytorch_version': torch.__version__,
+        'cuda_available': torch.cuda.is_available(),
+        'device_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        'models_count': len(get_available_models()),
+        'project_size': sum(f.stat().st_size for f in Path('.').rglob('*.py') if f.is_file()) / 1024 / 1024
+    }
+    
+    return render_template('about.html', system_info=system_info)
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload for training"""
@@ -193,7 +228,7 @@ def run_training(config):
         
         print("📦 Importing training modules...")
         # Import training modules
-        import train
+        import src.training.train as train
         print("✅ Training modules imported")
         
         # Load and process data

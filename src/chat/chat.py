@@ -9,14 +9,30 @@ import argparse
 import torch
 from contextlib import nullcontext
 
-from enhanced_gpt import GPT, GPTConfig
-from data_loader import DataProcessor
+from ..models.enhanced_gpt import GPT, GPTConfig
+from ..training.data_loader import DataProcessor
 
 class ChatBot:
     """Interactive chatbot using trained HomeMade GPT"""
     
     def __init__(self, model_path, device='auto'):
         """Initialize the chatbot with a trained model"""
+        
+        # Add backward compatibility for old models
+        import sys
+        from types import ModuleType
+        
+        # Create fake modules for old imports if they don't exist
+        if 'enhanced_gpt' not in sys.modules:
+            enhanced_gpt_module = ModuleType('enhanced_gpt')
+            enhanced_gpt_module.GPT = GPT
+            enhanced_gpt_module.GPTConfig = GPTConfig
+            sys.modules['enhanced_gpt'] = enhanced_gpt_module
+        
+        if 'data_loader' not in sys.modules:
+            data_loader_module = ModuleType('data_loader')
+            data_loader_module.DataProcessor = DataProcessor
+            sys.modules['data_loader'] = data_loader_module
         
         # Device setup
         if device == 'auto':
@@ -26,7 +42,7 @@ class ChatBot:
         
         device_type = 'cuda' if 'cuda' in self.device else 'cpu'
         
-        # Load model
+        # Load model with backward compatibility
         print(f"Loading model from {model_path}...")
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         

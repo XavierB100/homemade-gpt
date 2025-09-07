@@ -130,8 +130,15 @@
                     </a>
                     {% endif %}
                     
-                    <button class="btn btn-outline-info btn-sm" 
-                            onclick="showModelInfo('{{ model.name }}', {{ model|tojson }})">
+                    <button class="btn btn-outline-info btn-sm model-info-btn" 
+                            data-model-name="{{ model.name }}"
+                            data-model-file="{{ model.file }}"
+                            data-model-size="{{ model.size }}"
+                            data-model-modified="{{ model.modified }}"
+                            data-model-params="{{ model.params }}"
+                            data-model-vocab="{{ model.vocab_size }}"
+                            data-model-path="{{ model.path }}"
+                            {% if model.get('error') %}data-model-error="{{ model.error }}"{% endif %}>
                         <i class="bi bi-info-circle"></i> Info
                     </button>
                     
@@ -152,8 +159,11 @@
         <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg me-3">
             <i class="bi bi-cpu"></i> Train New Model
         </a>
-        <button class="btn btn-warning-gradient btn-lg" onclick="cleanupModels()">
-            <i class="bi bi-gear"></i> Cleanup Failed
+        <button class="btn btn-warning-gradient btn-lg" 
+                onclick="cleanupModels()"
+                title="Remove all models that failed to load or have errors"
+                data-bs-toggle="tooltip">
+            <i class="bi bi-trash3"></i> Remove Error Models
         </button>
     </div>
 </div>
@@ -181,22 +191,22 @@
 <!-- Model Info Modal -->
 <div class="modal fade" id="modelInfoModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+        <div class="modal-content" style="background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--bg-tertiary);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--bg-tertiary);">
+                <h5 class="modal-title" style="color: var(--text-primary);">
                     <i class="bi bi-info-circle"></i> Model Information
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
             </div>
             <div class="modal-body">
                 <div id="modelInfoContent">
                     <!-- Content will be populated by JavaScript -->
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="border-top: 1px solid var(--bg-tertiary);">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-success" id="chatWithModelBtn">
-                    <i class="bi bi-chat-dots"></i> Chat with Model
+                <button type="button" class="btn btn-success-gradient" id="chatWithModelBtn">
+                    <i class="bi bi-terminal"></i> Generate Text
                 </button>
             </div>
         </div>
@@ -206,20 +216,20 @@
 <!-- Delete Confirmation Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-exclamation-triangle text-danger"></i> Confirm Delete
+        <div class="modal-content" style="background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--bg-tertiary);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--bg-tertiary);">
+                <h5 class="modal-title" style="color: var(--text-primary);">
+                    <i class="bi bi-exclamation-triangle" style="color: var(--red-primary);"></i> Confirm Delete
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete the model <strong id="deleteModelName"></strong>?</p>
-                <p class="text-muted">This action cannot be undone. The model file will be permanently removed.</p>
+                <p style="color: var(--text-primary);">Are you sure you want to delete the model <strong id="deleteModelName"></strong>?</p>
+                <p style="color: var(--text-muted);">This action cannot be undone. The model file will be permanently removed.</p>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="border-top: 1px solid var(--bg-tertiary);">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                <button type="button" class="btn btn-warning-gradient" id="confirmDeleteBtn">
                     <i class="bi bi-trash"></i> Delete Model
                 </button>
             </div>
@@ -233,48 +243,59 @@
 let currentModelToDelete = null;
 let currentModelForChat = null;
 
-function showModelInfo(modelName, modelData) {
+function showModelInfo(button) {
+    const modelName = button.dataset.modelName;
+    const modelFile = button.dataset.modelFile;
+    const modelSize = parseInt(button.dataset.modelSize);
+    const modelModified = button.dataset.modelModified;
+    const modelParams = button.dataset.modelParams;
+    const modelVocab = button.dataset.modelVocab;
+    const modelPath = button.dataset.modelPath;
+    const modelError = button.dataset.modelError;
+    
+    console.log('showModelInfo called with:', modelName);
+    
     const modal = new bootstrap.Modal(document.getElementById('modelInfoModal'));
     const content = document.getElementById('modelInfoContent');
     
     let infoHtml = `
         <div class="row">
             <div class="col-md-6">
-                <h6>Basic Information</h6>
-                <table class="table table-sm">
-                    <tr><td><strong>Name:</strong></td><td>${modelData.name}</td></tr>
-                    <tr><td><strong>File:</strong></td><td><code>${modelData.file}</code></td></tr>
-                    <tr><td><strong>Size:</strong></td><td>${(modelData.size / 1024 / 1024).toFixed(1)} MB</td></tr>
-                    <tr><td><strong>Modified:</strong></td><td>${modelData.modified}</td></tr>
-                </table>
+                <h6 style="color: var(--text-primary); margin-bottom: 15px;">Basic Information</h6>
+                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="margin-bottom: 12px;"><strong style="color: var(--text-secondary);">Name:</strong><br><span style="color: var(--text-primary);">${modelName}</span></div>
+                    <div style="margin-bottom: 12px;"><strong style="color: var(--text-secondary);">File:</strong><br><code style="color: var(--green-primary); background: var(--bg-primary); padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">${modelFile}</code></div>
+                    <div style="margin-bottom: 12px;"><strong style="color: var(--text-secondary);">Size:</strong><br><span style="color: var(--text-primary); font-family: 'JetBrains Mono', monospace;">${(modelSize / 1024 / 1024).toFixed(1)} MB</span></div>
+                    <div style="margin-bottom: 0;"><strong style="color: var(--text-secondary);">Modified:</strong><br><span style="color: var(--text-primary);">${modelModified}</span></div>
+                </div>
             </div>
             <div class="col-md-6">
-                <h6>Model Details</h6>
-                <table class="table table-sm">
-                    <tr><td><strong>Parameters:</strong></td><td>${modelData.params}</td></tr>
-                    <tr><td><strong>Vocabulary:</strong></td><td>${modelData.vocab_size}</td></tr>
-                    <tr><td><strong>Status:</strong></td><td>
+                <h6 style="color: var(--text-primary); margin-bottom: 15px;">Model Details</h6>
+                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="margin-bottom: 12px;"><strong style="color: var(--text-secondary);">Parameters:</strong><br><span style="color: var(--purple-primary); font-family: 'JetBrains Mono', monospace; font-weight: 600;">${modelParams}</span></div>
+                    <div style="margin-bottom: 12px;"><strong style="color: var(--text-secondary);">Vocabulary:</strong><br><span style="color: var(--cyan-primary); font-family: 'JetBrains Mono', monospace; font-weight: 600;">${modelVocab}</span></div>
+                    <div style="margin-bottom: 0;"><strong style="color: var(--text-secondary);">Status:</strong><br>
     `;
     
-    if (modelData.params !== 'Error') {
+    if (modelParams !== 'Error') {
         infoHtml += '<span class="badge bg-success">Working</span>';
     } else {
         infoHtml += '<span class="badge bg-danger">Error</span>';
     }
     
-    infoHtml += `</td></tr>
-                </table>
+    infoHtml += `</div>
+                </div>
             </div>
         </div>
     `;
     
-    if (modelData.error) {
+    if (modelError) {
         infoHtml += `
             <div class="row mt-3">
                 <div class="col-12">
-                    <h6>Error Details</h6>
-                    <div class="alert alert-danger">
-                        <code>${modelData.error}</code>
+                    <h6 style="color: var(--red-primary); margin-bottom: 15px;">⚠️ Error Details</h6>
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--red-primary); border-radius: 8px; padding: 15px;">
+                        <code style="color: var(--red-primary); background: transparent; font-size: 0.9rem; word-break: break-word;">${modelError}</code>
                     </div>
                 </div>
             </div>
@@ -284,9 +305,9 @@ function showModelInfo(modelName, modelData) {
     infoHtml += `
         <div class="row mt-3">
             <div class="col-12">
-                <h6>File Path</h6>
-                <div class="alert alert-light">
-                    <code>${modelData.path}</code>
+                <h6 style="color: var(--text-primary); margin-bottom: 15px;">📁 File Path</h6>
+                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 15px; border: 1px solid var(--bg-primary);">
+                    <code style="color: var(--green-primary); background: transparent; font-size: 0.9rem; word-break: break-all;">${modelPath}</code>
                 </div>
             </div>
         </div>
@@ -295,9 +316,9 @@ function showModelInfo(modelName, modelData) {
     content.innerHTML = infoHtml;
     
     // Set up chat button
-    currentModelForChat = modelData.file;
+    currentModelForChat = modelFile;
     document.getElementById('chatWithModelBtn').style.display = 
-        modelData.params !== 'Error' ? 'inline-block' : 'none';
+        modelParams !== 'Error' ? 'inline-block' : 'none';
     
     modal.show();
 }
@@ -312,13 +333,57 @@ function confirmDelete(modelFile, modelName) {
 
 function cleanupModels() {
     if (confirm('This will delete all models with errors. Are you sure?')) {
-        // In a real implementation, you would send a request to cleanup error models
-        alert('Cleanup functionality would be implemented here');
+        // Get all error models and delete them
+        const errorModels = document.querySelectorAll('.badge-danger').closest('.card');
+        
+        if (errorModels.length === 0) {
+            alert('No failed models to cleanup.');
+            return;
+        }
+        
+        let deletedCount = 0;
+        errorModels.forEach(card => {
+            const deleteBtn = card.querySelector('button[onclick*="confirmDelete"]');
+            if (deleteBtn) {
+                const onclick = deleteBtn.getAttribute('onclick');
+                const matches = onclick.match(/confirmDelete\('([^']+)',/);
+                if (matches) {
+                    const modelFile = matches[1];
+                    // Send delete request
+                    fetch(`/delete_model/${modelFile}`, { method: 'GET' })
+                        .then(() => {
+                            card.remove();
+                            deletedCount++;
+                        })
+                        .catch(console.error);
+                }
+            }
+        });
+        
+        setTimeout(() => {
+            if (deletedCount > 0) {
+                alert(`Cleaned up ${deletedCount} failed model(s). Refreshing page...`);
+                location.reload();
+            }
+        }, 1000);
     }
 }
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Model info buttons
+    document.querySelectorAll('.model-info-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            showModelInfo(this);
+        });
+    });
+    
     // Delete confirmation
     document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
         if (currentModelToDelete) {
