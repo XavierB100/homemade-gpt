@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Chat with AI - HomeMade GPT{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="text-center mb-4">
+            <i class="bi bi-chat-dots-fill feature-icon d-block"></i>
+            Chat with Your AI
+        </h1>
+        <p class="text-center text-muted mb-5">
+            Select a trained model and start chatting! Adjust creativity and response length as needed.
+        </p>
+    </div>
+</div>
+
+{% if models %}
+<div class="row">
+    <!-- Model Selection Sidebar -->
+    <div class="col-lg-3 mb-4">
+        <div class="card sticky-top" style="top: 100px;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-cpu"></i> Select Model
+                </h6>
+            </div>
+            <div class="card-body">
+                <select class="form-select mb-3" id="modelSelect">
+                    <option value="">Choose a model...</option>
+                    {% for model in models %}
+                    <option value="{{ model.path }}" 
+                            {% if request.args.get('model') == model.file %}selected{% endif %}>
+                        {{ model.name }} ({{ model.params }})
+                    </option>
+                    {% endfor %}
+                </select>
+                
+                <div id="modelInfo" class="alert alert-info d-none">
+                    <small>
+                        <strong>Selected Model:</strong><br>
+                        <span id="modelName">-</span><br>
+                        <span id="modelDetails">-</span>
+                    </small>
+                </div>
+                
+                <!-- Generation Settings -->
+                <h6 class="mt-3 mb-2">Generation Settings</h6>
+                
+                <div class="mb-3">
+                    <label for="temperature" class="form-label">
+                        Creativity: <span id="tempValue">0.8</span>
+                    </label>
+                    <input type="range" class="form-range" id="temperature" 
+                           min="0.1" max="2.0" step="0.1" value="0.8">
+                    <small class="text-muted">Lower = more focused, Higher = more creative</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="maxLength" class="form-label">
+                        Response Length: <span id="lengthValue">200</span>
+                    </label>
+                    <input type="range" class="form-range" id="maxLength" 
+                           min="50" max="500" step="25" value="200">
+                </div>
+                
+                <!-- Chat Controls -->
+                <div class="d-grid gap-2 mt-3">
+                    <button class="btn btn-outline-warning btn-sm" onclick="clearChat()">
+                        <i class="bi bi-trash"></i> Clear Chat
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="exportChat()">
+                        <i class="bi bi-download"></i> Export Chat
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chat Area -->
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0">
+                        <i class="bi bi-robot"></i> AI Chat
+                    </h6>
+                    <small class="text-muted" id="chatStatus">Select a model to start chatting</small>
+                </div>
+                <div>
+                    <span class="badge bg-success d-none" id="modelStatus">Ready</span>
+                </div>
+            </div>
+            
+            <div class="chat-container" id="chatContainer">
+                <div class="text-center py-5" id="welcomeMessage">
+                    <i class="bi bi-robot" style="font-size: 4rem; color: #667eea; margin-bottom: 20px;"></i>
+                    <h5>Welcome to HomeMade GPT Chat!</h5>
+                    <p class="text-muted">
+                        Select a trained model from the sidebar and start chatting with your custom AI.
+                    </p>
+                </div>
+                
+                <div id="messages"></div>
+                
+                <!-- Typing Indicator -->
+                <div class="typing-indicator d-none" id="typingIndicator">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <span class="ms-2">AI is thinking...</span>
+                </div>
+            </div>
+            
+            <div class="card-footer">
+                <form id="chatForm">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="messageInput" 
+                               placeholder="Type your message here..." disabled>
+                        <button type="submit" class="btn btn-gradient" id="sendBtn" disabled>
+                            <i class="bi bi-send"></i> Send
+                        </button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                        Press Enter to send • Shift+Enter for new line
+                    </small>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- No Models Available -->
+<div class="row">
+    <div class="col-12">
+        <div class="card text-center">
+            <div class="card-body py-5">
+                <i class="bi bi-exclamation-triangle" style="font-size: 4rem; color: #ffc107; margin-bottom: 20px;"></i>
+                <h4>No Trained Models Available</h4>
+                <p class="text-muted mb-4">
+                    You need to train at least one model before you can start chatting.
+                </p>
+                <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
+                    <i class="bi bi-plus-circle"></i> Train Your First Model
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let selectedModel = null;
+let chatHistory = [];
+let isGenerating = false;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Update temperature display
+    document.getElementById('temperature').addEventListener('input', function() {
+        document.getElementById('tempValue').textContent = this.value;
+    });
+    
+    // Update length display
+    document.getElementById('maxLength').addEventListener('input', function() {
+        document.getElementById('lengthValue').textContent = this.value;
+    });
+    
+    // Model selection
+    document.getElementById('modelSelect').addEventListener('change', function() {
+        if (this.value) {
+            selectModel(this.value, this.options[this.selectedIndex].text);
+        } else {
+            deselectModel();
+        }
+    });
+    
+    // Chat form
+    document.getElementById('chatForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+    
+    // Enter key handling
+    document.getElementById('messageInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Auto-select model if provided in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const modelParam = urlParams.get('model');
+    if (modelParam) {
+        const select = document.getElementById('modelSelect');
+        for (let option of select.options) {
+            if (option.value.includes(modelParam)) {
+                select.value = option.value;
+                selectModel(option.value, option.text);
+                break;
+            }
+        }
+    }
+});
+
+function selectModel(modelPath, modelName) {
+    selectedModel = modelPath;
+    
+    // Update UI
+    document.getElementById('modelInfo').classList.remove('d-none');
+    document.getElementById('modelName').textContent = modelName;
+    document.getElementById('modelDetails').textContent = `Path: ${modelPath}`;
+    document.getElementById('chatStatus').textContent = 'Model loaded - Ready to chat!';
+    document.getElementById('modelStatus').classList.remove('d-none');
+    
+    // Enable chat input
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('messageInput').focus();
+    
+    // Hide welcome message
+    document.getElementById('welcomeMessage').style.display = 'none';
+    
+    // Show welcome chat message
+    addMessage('assistant', `👋 Hi! I'm your custom AI trained on your data. What would you like to talk about?`);
+}\n\nfunction deselectModel() {\n    selectedModel = null;\n    \n    // Update UI\n    document.getElementById('modelInfo').classList.add('d-none');\n    document.getElementById('chatStatus').textContent = 'Select a model to start chatting';\n    document.getElementById('modelStatus').classList.add('d-none');\n    \n    // Disable chat input\n    document.getElementById('messageInput').disabled = true;\n    document.getElementById('sendBtn').disabled = true;\n    \n    // Show welcome message\n    document.getElementById('welcomeMessage').style.display = 'block';\n    document.getElementById('messages').innerHTML = '';\n}\n\nfunction sendMessage() {\n    if (!selectedModel || isGenerating) return;\n    \n    const input = document.getElementById('messageInput');\n    const message = input.value.trim();\n    \n    if (!message) return;\n    \n    // Add user message\n    addMessage('user', message);\n    chatHistory.push({role: 'user', content: message});\n    \n    // Clear input\n    input.value = '';\n    \n    // Show typing indicator\n    showTypingIndicator();\n    \n    // Generate AI response\n    generateResponse(message);\n}\n\nfunction generateResponse(message) {\n    isGenerating = true;\n    document.getElementById('sendBtn').disabled = true;\n    \n    const requestData = {\n        model_path: selectedModel,\n        message: message,\n        temperature: parseFloat(document.getElementById('temperature').value),\n        max_length: parseInt(document.getElementById('maxLength').value)\n    };\n    \n    fetch('/chat_api', {\n        method: 'POST',\n        headers: {\n            'Content-Type': 'application/json',\n        },\n        body: JSON.stringify(requestData)\n    })\n    .then(response => response.json())\n    .then(data => {\n        hideTypingIndicator();\n        \n        if (data.success) {\n            const response = data.response || 'I apologize, but I couldn\\'t generate a response.';\n            addMessage('assistant', response);\n            chatHistory.push({role: 'assistant', content: response});\n        } else {\n            addMessage('assistant', `❌ Error: ${data.error}`, 'error');\n        }\n        \n        isGenerating = false;\n        document.getElementById('sendBtn').disabled = false;\n        document.getElementById('messageInput').focus();\n    })\n    .catch(error => {\n        hideTypingIndicator();\n        addMessage('assistant', `❌ Network error: ${error}`, 'error');\n        isGenerating = false;\n        document.getElementById('sendBtn').disabled = false;\n    });\n}\n\nfunction addMessage(role, content, type = 'normal') {\n    const messagesContainer = document.getElementById('messages');\n    const messageDiv = document.createElement('div');\n    \n    if (role === 'user') {\n        messageDiv.className = 'message-user';\n        messageDiv.innerHTML = `<strong>You:</strong><br>${escapeHtml(content)}`;\n    } else {\n        messageDiv.className = type === 'error' ? 'message-bot' : 'message-bot';\n        if (type === 'error') {\n            messageDiv.style.backgroundColor = '#ffebee';\n            messageDiv.style.borderLeftColor = '#f44336';\n        }\n        messageDiv.innerHTML = `<strong>🤖 AI:</strong><br>${escapeHtml(content)}`;\n    }\n    \n    messagesContainer.appendChild(messageDiv);\n    messagesContainer.scrollTop = messagesContainer.scrollHeight;\n}\n\nfunction showTypingIndicator() {\n    document.getElementById('typingIndicator').classList.remove('d-none');\n    const container = document.getElementById('chatContainer');\n    container.scrollTop = container.scrollHeight;\n}\n\nfunction hideTypingIndicator() {\n    document.getElementById('typingIndicator').classList.add('d-none');\n}\n\nfunction clearChat() {\n    if (confirm('Are you sure you want to clear the chat history?')) {\n        document.getElementById('messages').innerHTML = '';\n        chatHistory = [];\n        \n        if (selectedModel) {\n            addMessage('assistant', '👋 Chat cleared! What would you like to talk about?');\n        }\n    }\n}\n\nfunction exportChat() {\n    if (chatHistory.length === 0) {\n        alert('No chat history to export.');\n        return;\n    }\n    \n    const chatText = chatHistory.map(msg => \n        `${msg.role === 'user' ? 'You' : 'AI'}: ${msg.content}`\n    ).join('\\n\\n');\n    \n    const blob = new Blob([chatText], {type: 'text/plain'});\n    const url = URL.createObjectURL(blob);\n    const a = document.createElement('a');\n    a.href = url;\n    a.download = `chat_history_${new Date().toISOString().split('T')[0]}.txt`;\n    document.body.appendChild(a);\n    a.click();\n    document.body.removeChild(a);\n    URL.revokeObjectURL(url);\n}\n\nfunction escapeHtml(text) {\n    const div = document.createElement('div');\n    div.textContent = text;\n    return div.innerHTML.replace(/\\n/g, '<br>');\n}\n</script>\n{% endblock %}"}

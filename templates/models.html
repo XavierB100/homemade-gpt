@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Models - HomeMade GPT{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="text-center mb-4">
+            <i class="bi bi-cpu-fill feature-icon d-block"></i>
+            Manage Your Models
+        </h1>
+        <p class="text-center text-muted mb-5">
+            View, organize, and manage all your trained AI models in one place.
+        </p>
+    </div>
+</div>
+
+{% if models %}
+<!-- Stats Overview -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-primary">{{ models|length }}</h3>
+                <small class="text-muted">Total Models</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-success">
+                    {{ "%.1f"|format((models|sum(attribute='size') / 1024 / 1024)) }} MB
+                </h3>
+                <small class="text-muted">Total Size</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-info">
+                    {{ models|rejectattr('params', 'equalto', 'Error')|list|length }}
+                </h3>
+                <small class="text-muted">Working Models</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-warning">
+                    {{ models|selectattr('params', 'equalto', 'Error')|list|length }}
+                </h3>
+                <small class="text-muted">Error Models</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Models Grid -->
+<div class="row">
+    {% for model in models %}
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="bi bi-robot"></i> {{ model.name }}
+                </h6>
+                {% if model.params != 'Error' %}
+                <span class="badge bg-primary">{{ model.params }}</span>
+                {% else %}
+                <span class="badge bg-danger">Error</span>
+                {% endif %}
+            </div>
+            
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted">Modified</small><br>
+                        <span class="fw-bold">{{ model.modified }}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">File Size</small><br>
+                        <span class="fw-bold">{{ "%.1f"|format(model.size / 1024 / 1024) }} MB</span>
+                    </div>
+                </div>
+                
+                {% if model.params != 'Error' %}
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted">Vocabulary</small><br>
+                        <span class="fw-bold">{{ model.vocab_size }}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Parameters</small><br>
+                        <span class="fw-bold">{{ model.params }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-danger py-2">
+                    <small><strong>Error:</strong> {{ model.get('error', 'Unknown error') }}</small>
+                </div>
+                {% endif %}
+                
+                <div class="mb-2">
+                    <small class="text-muted">File Path</small><br>
+                    <code class="small">{{ model.file }}</code>
+                </div>
+            </div>
+            
+            <div class="card-footer">
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if model.params != 'Error' %}
+                    <a href="{{ url_for('chat_page') }}?model={{ model.file }}" 
+                       class="btn btn-success btn-sm flex-fill">
+                        <i class="bi bi-chat-dots"></i> Chat
+                    </a>
+                    {% endif %}
+                    
+                    <button class="btn btn-outline-info btn-sm" 
+                            onclick="showModelInfo('{{ model.name }}', {{ model|tojson }})">
+                        <i class="bi bi-info-circle"></i> Info
+                    </button>
+                    
+                    <button class="btn btn-outline-danger btn-sm" 
+                            onclick="confirmDelete('{{ model.file }}', '{{ model.name }}')">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Actions -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg me-3">
+            <i class="bi bi-plus-circle"></i> Train New Model
+        </a>
+        <button class="btn btn-outline-warning btn-lg" onclick="cleanupModels()">
+            <i class="bi bi-trash3"></i> Cleanup Errors
+        </button>
+    </div>
+</div>
+
+{% else %}
+<!-- No Models -->
+<div class="row">
+    <div class="col-12">
+        <div class="card text-center">
+            <div class="card-body py-5">
+                <i class="bi bi-cpu" style="font-size: 4rem; color: #6c757d; margin-bottom: 20px;"></i>
+                <h4>No Models Found</h4>
+                <p class="text-muted mb-4">
+                    You haven't trained any models yet. Start by uploading some text data and training your first AI model!
+                </p>
+                <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
+                    <i class="bi bi-plus-circle"></i> Train Your First Model
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Model Info Modal -->
+<div class="modal fade" id="modelInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle"></i> Model Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modelInfoContent">
+                    <!-- Content will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" id="chatWithModelBtn">
+                    <i class="bi bi-chat-dots"></i> Chat with Model
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-danger"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the model <strong id="deleteModelName"></strong>?</p>
+                <p class="text-muted">This action cannot be undone. The model file will be permanently removed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="bi bi-trash"></i> Delete Model
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentModelToDelete = null;
+let currentModelForChat = null;
+
+function showModelInfo(modelName, modelData) {
+    const modal = new bootstrap.Modal(document.getElementById('modelInfoModal'));
+    const content = document.getElementById('modelInfoContent');
+    
+    let infoHtml = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Basic Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Name:</strong></td><td>${modelData.name}</td></tr>
+                    <tr><td><strong>File:</strong></td><td><code>${modelData.file}</code></td></tr>
+                    <tr><td><strong>Size:</strong></td><td>${(modelData.size / 1024 / 1024).toFixed(1)} MB</td></tr>
+                    <tr><td><strong>Modified:</strong></td><td>${modelData.modified}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Model Details</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Parameters:</strong></td><td>${modelData.params}</td></tr>
+                    <tr><td><strong>Vocabulary:</strong></td><td>${modelData.vocab_size}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td>
+    `;
+    
+    if (modelData.params !== 'Error') {
+        infoHtml += '<span class="badge bg-success">Working</span>';
+    } else {
+        infoHtml += '<span class="badge bg-danger">Error</span>';
+    }
+    
+    infoHtml += `</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    if (modelData.error) {
+        infoHtml += `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Error Details</h6>
+                    <div class="alert alert-danger">
+                        <code>${modelData.error}</code>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    infoHtml += `
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6>File Path</h6>
+                <div class="alert alert-light">
+                    <code>${modelData.path}</code>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = infoHtml;
+    
+    // Set up chat button
+    currentModelForChat = modelData.file;
+    document.getElementById('chatWithModelBtn').style.display = 
+        modelData.params !== 'Error' ? 'inline-block' : 'none';
+    
+    modal.show();
+}
+
+function confirmDelete(modelFile, modelName) {
+    currentModelToDelete = modelFile;
+    document.getElementById('deleteModelName').textContent = modelName;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+function cleanupModels() {
+    if (confirm('This will delete all models with errors. Are you sure?')) {
+        // In a real implementation, you would send a request to cleanup error models
+        alert('Cleanup functionality would be implemented here');
+    }
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Delete confirmation
+    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+        if (currentModelToDelete) {
+            window.location.href = `/delete_model/${currentModelToDelete}`;
+        }
+    });
+    
+    // Chat with model from info modal
+    document.getElementById('chatWithModelBtn').addEventListener('click', function() {
+        if (currentModelForChat) {
+            window.location.href = `/chat?model=${currentModelForChat}`;
+        }
+    });
+});
+
+// Auto-refresh every 30 seconds to check for new models
+setInterval(function() {
+    if (!document.hidden) {
+        // Only refresh if the page is visible
+        // In a real implementation, you might want to check for updates via AJAX
+        // location.reload();
+    }
+}, 30000);
+</script>
+{% endblock %}

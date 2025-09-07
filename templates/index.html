@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}HomeMade GPT - Train Your Own AI{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="text-center py-5">
+            <h1 class="display-4 fw-bold mb-3">
+                <i class="bi bi-robot feature-icon d-block"></i>
+                Enhanced HomeMade GPT
+            </h1>
+            <p class="lead mb-4">
+                Train your own AI models on any text data - books, WhatsApp chats, documents, and more!
+            </p>
+            <div class="d-flex gap-3 justify-content-center flex-wrap">
+                <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
+                    <i class="bi bi-mortarboard-fill"></i> Start Training
+                </a>
+                <a href="{{ url_for('chat_page') }}" class="btn btn-success-gradient btn-lg">
+                    <i class="bi bi-chat-dots-fill"></i> Chat Now
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-5">✨ What Makes This Special</h2>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center">
+            <div class="card-body">
+                <i class="bi bi-upload feature-icon d-block"></i>
+                <h5 class="card-title">Any Text Data</h5>
+                <p class="card-text">
+                    Upload books, novels, WhatsApp conversations, documentation, or any text file. 
+                    Auto-detection handles different formats automatically.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center">
+            <div class="card-body">
+                <i class="bi bi-cpu feature-icon d-block"></i>
+                <h5 class="card-title">Smart Training</h5>
+                <p class="card-text">
+                    Modern transformer architecture with configurable model sizes. 
+                    From nano (0.8M params) to large (150M params).
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 text-center">
+            <div class="card-body">
+                <i class="bi bi-chat-heart feature-icon d-block"></i>
+                <h5 class="card-title">Interactive Chat</h5>
+                <p class="card-text">
+                    Chat with your trained models in real-time. 
+                    Adjust creativity, response length, and save conversations.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-5">
+    <div class="col-md-3 mb-3">
+        <div class="stats-card">
+            <div class="stats-number">📚</div>
+            <h6>Any Text Format</h6>
+            <small>Books, chats, docs</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stats-card">
+            <div class="stats-number">🚀</div>
+            <h6>Fast Training</h6>
+            <small>Real-time progress</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stats-card">
+            <div class="stats-number">💬</div>
+            <h6>Smart Chat</h6>
+            <small>Like ChatGPT</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stats-card">
+            <div class="stats-number">🎯</div>
+            <h6>Custom Models</h6>
+            <small>Your data, your AI</small>
+        </div>
+    </div>
+</div>
+
+<!-- Available Models Section -->
+{% if models %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-4">🤖 Your Trained Models</h2>
+    </div>
+    
+    {% for model in models[:6] %}
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title mb-0">{{ model.name }}</h6>
+                    <span class="badge bg-primary">{{ model.params }}</span>
+                </div>
+                <p class="text-muted small mb-2">
+                    <i class="bi bi-calendar"></i> {{ model.modified }}
+                </p>
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-database"></i> Vocab: {{ model.vocab_size }}
+                    <span class="ms-2">
+                        <i class="bi bi-file-earmark"></i> {{ "%.1f"|format(model.size / 1024 / 1024) }} MB
+                    </span>
+                </p>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('chat_page') }}?model={{ model.file }}" 
+                       class="btn btn-gradient btn-sm flex-fill">
+                        <i class="bi bi-chat"></i> Chat
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    
+    {% if models|length > 6 %}
+    <div class="col-12 text-center">
+        <a href="{{ url_for('models_page') }}" class="btn btn-outline-primary">
+            View All Models ({{ models|length }})
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card text-center">
+            <div class="card-body py-5">
+                <i class="bi bi-robot feature-icon d-block"></i>
+                <h4>No Models Yet</h4>
+                <p class="text-muted mb-4">
+                    Start by training your first AI model on custom text data!
+                </p>
+                <a href="{{ url_for('train_page') }}" class="btn btn-gradient btn-lg">
+                    <i class="bi bi-plus-circle"></i> Train Your First Model
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- How It Works -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-5">🔥 How It Works</h2>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="text-center">
+            <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                 style="width: 60px; height: 60px; font-size: 1.5rem; font-weight: bold;">
+                1
+            </div>
+            <h5>Upload Your Data</h5>
+            <p class="text-muted">
+                Drop in any text file - books, WhatsApp chats, documentation. 
+                The system automatically detects and processes the format.
+            </p>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="text-center">
+            <div class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                 style="width: 60px; height: 60px; font-size: 1.5rem; font-weight: bold;">
+                2
+            </div>
+            <h5>Train Your Model</h5>
+            <p class="text-muted">
+                Choose model size and training settings. Watch real-time progress 
+                as your AI learns patterns from your data.
+            </p>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="text-center">
+            <div class="bg-warning text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                 style="width: 60px; height: 60px; font-size: 1.5rem; font-weight: bold;">
+                3
+            </div>
+            <h5>Chat & Generate</h5>
+            <p class="text-muted">
+                Start chatting with your custom AI! Generate text in the style 
+                of your training data with adjustable creativity.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Call to Action -->
+<div class="row">
+    <div class="col-12">
+        <div class="card bg-gradient text-white text-center" style="background: var(--primary-gradient) !important;">
+            <div class="card-body py-5">
+                <h3 class="card-title">Ready to Build Your AI?</h3>
+                <p class="card-text lead mb-4">
+                    Join the AI revolution! Train models on your own data and create personalized AI assistants.
+                </p>
+                <div class="d-flex gap-3 justify-content-center flex-wrap">
+                    <a href="{{ url_for('train_page') }}" class="btn btn-light btn-lg">
+                        <i class="bi bi-rocket-takeoff"></i> Start Training Now
+                    </a>
+                    <a href="{{ url_for('models_page') }}" class="btn btn-outline-light btn-lg">
+                        <i class="bi bi-collection"></i> Manage Models
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
