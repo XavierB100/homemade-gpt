@@ -173,9 +173,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Model selection
     document.getElementById('modelSelect').addEventListener('change', function() {
+        console.log('Model selection changed:', this.value);
         if (this.value) {
+            console.log('Selecting model:', this.options[this.selectedIndex].text);
             selectModel(this.value, this.options[this.selectedIndex].text);
         } else {
+            console.log('Deselecting model');
             deselectModel();
         }
     });
@@ -210,6 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function selectModel(modelPath, modelName) {
+    console.log('selectModel called:', modelPath, modelName);
     selectedModel = modelPath;
     
     // Update UI
@@ -220,13 +224,167 @@ function selectModel(modelPath, modelName) {
     document.getElementById('modelStatus').classList.remove('d-none');
     
     // Enable chat input
-    document.getElementById('messageInput').disabled = false;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('messageInput').focus();
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    console.log('Enabling input elements:', messageInput, sendBtn);
+    messageInput.disabled = false;
+    sendBtn.disabled = false;
+    messageInput.focus();
     
     // Hide welcome message
     document.getElementById('welcomeMessage').style.display = 'none';
     
     // Show welcome chat message
     addMessage('assistant', `👋 Hi! I'm your custom AI trained on your data. What would you like to talk about?`);
-}\n\nfunction deselectModel() {\n    selectedModel = null;\n    \n    // Update UI\n    document.getElementById('modelInfo').classList.add('d-none');\n    document.getElementById('chatStatus').textContent = 'Select a model to start chatting';\n    document.getElementById('modelStatus').classList.add('d-none');\n    \n    // Disable chat input\n    document.getElementById('messageInput').disabled = true;\n    document.getElementById('sendBtn').disabled = true;\n    \n    // Show welcome message\n    document.getElementById('welcomeMessage').style.display = 'block';\n    document.getElementById('messages').innerHTML = '';\n}\n\nfunction sendMessage() {\n    if (!selectedModel || isGenerating) return;\n    \n    const input = document.getElementById('messageInput');\n    const message = input.value.trim();\n    \n    if (!message) return;\n    \n    // Add user message\n    addMessage('user', message);\n    chatHistory.push({role: 'user', content: message});\n    \n    // Clear input\n    input.value = '';\n    \n    // Show typing indicator\n    showTypingIndicator();\n    \n    // Generate AI response\n    generateResponse(message);\n}\n\nfunction generateResponse(message) {\n    isGenerating = true;\n    document.getElementById('sendBtn').disabled = true;\n    \n    const requestData = {\n        model_path: selectedModel,\n        message: message,\n        temperature: parseFloat(document.getElementById('temperature').value),\n        max_length: parseInt(document.getElementById('maxLength').value)\n    };\n    \n    fetch('/chat_api', {\n        method: 'POST',\n        headers: {\n            'Content-Type': 'application/json',\n        },\n        body: JSON.stringify(requestData)\n    })\n    .then(response => response.json())\n    .then(data => {\n        hideTypingIndicator();\n        \n        if (data.success) {\n            const response = data.response || 'I apologize, but I couldn\\'t generate a response.';\n            addMessage('assistant', response);\n            chatHistory.push({role: 'assistant', content: response});\n        } else {\n            addMessage('assistant', `❌ Error: ${data.error}`, 'error');\n        }\n        \n        isGenerating = false;\n        document.getElementById('sendBtn').disabled = false;\n        document.getElementById('messageInput').focus();\n    })\n    .catch(error => {\n        hideTypingIndicator();\n        addMessage('assistant', `❌ Network error: ${error}`, 'error');\n        isGenerating = false;\n        document.getElementById('sendBtn').disabled = false;\n    });\n}\n\nfunction addMessage(role, content, type = 'normal') {\n    const messagesContainer = document.getElementById('messages');\n    const messageDiv = document.createElement('div');\n    \n    if (role === 'user') {\n        messageDiv.className = 'message-user';\n        messageDiv.innerHTML = `<strong>You:</strong><br>${escapeHtml(content)}`;\n    } else {\n        messageDiv.className = type === 'error' ? 'message-bot' : 'message-bot';\n        if (type === 'error') {\n            messageDiv.style.backgroundColor = '#ffebee';\n            messageDiv.style.borderLeftColor = '#f44336';\n        }\n        messageDiv.innerHTML = `<strong>🤖 AI:</strong><br>${escapeHtml(content)}`;\n    }\n    \n    messagesContainer.appendChild(messageDiv);\n    messagesContainer.scrollTop = messagesContainer.scrollHeight;\n}\n\nfunction showTypingIndicator() {\n    document.getElementById('typingIndicator').classList.remove('d-none');\n    const container = document.getElementById('chatContainer');\n    container.scrollTop = container.scrollHeight;\n}\n\nfunction hideTypingIndicator() {\n    document.getElementById('typingIndicator').classList.add('d-none');\n}\n\nfunction clearChat() {\n    if (confirm('Are you sure you want to clear the chat history?')) {\n        document.getElementById('messages').innerHTML = '';\n        chatHistory = [];\n        \n        if (selectedModel) {\n            addMessage('assistant', '👋 Chat cleared! What would you like to talk about?');\n        }\n    }\n}\n\nfunction exportChat() {\n    if (chatHistory.length === 0) {\n        alert('No chat history to export.');\n        return;\n    }\n    \n    const chatText = chatHistory.map(msg => \n        `${msg.role === 'user' ? 'You' : 'AI'}: ${msg.content}`\n    ).join('\\n\\n');\n    \n    const blob = new Blob([chatText], {type: 'text/plain'});\n    const url = URL.createObjectURL(blob);\n    const a = document.createElement('a');\n    a.href = url;\n    a.download = `chat_history_${new Date().toISOString().split('T')[0]}.txt`;\n    document.body.appendChild(a);\n    a.click();\n    document.body.removeChild(a);\n    URL.revokeObjectURL(url);\n}\n\nfunction escapeHtml(text) {\n    const div = document.createElement('div');\n    div.textContent = text;\n    return div.innerHTML.replace(/\\n/g, '<br>');\n}\n</script>\n{% endblock %}"}
+}
+
+function deselectModel() {
+    selectedModel = null;
+    
+    // Update UI
+    document.getElementById('modelInfo').classList.add('d-none');
+    document.getElementById('chatStatus').textContent = 'Select a model to start chatting';
+    document.getElementById('modelStatus').classList.add('d-none');
+    
+    // Disable chat input
+    document.getElementById('messageInput').disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    
+    // Show welcome message
+    document.getElementById('welcomeMessage').style.display = 'block';
+    document.getElementById('messages').innerHTML = '';
+}
+
+function sendMessage() {
+    if (!selectedModel || isGenerating) return;
+    
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message
+    addMessage('user', message);
+    chatHistory.push({role: 'user', content: message});
+    
+    // Clear input
+    input.value = '';
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    // Generate AI response
+    generateResponse(message);
+}
+
+function generateResponse(message) {
+    isGenerating = true;
+    document.getElementById('sendBtn').disabled = true;
+    
+    const requestData = {
+        model_path: selectedModel,
+        message: message,
+        temperature: parseFloat(document.getElementById('temperature').value),
+        max_length: parseInt(document.getElementById('maxLength').value)
+    };
+    
+    fetch('/chat_api', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideTypingIndicator();
+        
+        if (data.success) {
+            const response = data.response || 'I apologize, but I couldn\'t generate a response.';
+            addMessage('assistant', response);
+            chatHistory.push({role: 'assistant', content: response});
+        } else {
+            addMessage('assistant', `❌ Error: ${data.error}`, 'error');
+        }
+        
+        isGenerating = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('messageInput').focus();
+    })
+    .catch(error => {
+        hideTypingIndicator();
+        addMessage('assistant', `❌ Network error: ${error}`, 'error');
+        isGenerating = false;
+        document.getElementById('sendBtn').disabled = false;
+    });
+}
+
+function addMessage(role, content, type = 'normal') {
+    const messagesContainer = document.getElementById('messages');
+    const messageDiv = document.createElement('div');
+    
+    if (role === 'user') {
+        messageDiv.className = 'message-user';
+        messageDiv.innerHTML = `<strong>You:</strong><br>${escapeHtml(content)}`;
+    } else {
+        messageDiv.className = type === 'error' ? 'message-bot' : 'message-bot';
+        if (type === 'error') {
+            messageDiv.style.backgroundColor = '#ffebee';
+            messageDiv.style.borderLeftColor = '#f44336';
+        }
+        messageDiv.innerHTML = `<strong>🤖 AI:</strong><br>${escapeHtml(content)}`;
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function showTypingIndicator() {
+    document.getElementById('typingIndicator').classList.remove('d-none');
+    const container = document.getElementById('chatContainer');
+    container.scrollTop = container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    document.getElementById('typingIndicator').classList.add('d-none');
+}
+
+function clearChat() {
+    if (confirm('Are you sure you want to clear the chat history?')) {
+        document.getElementById('messages').innerHTML = '';
+        chatHistory = [];
+        
+        if (selectedModel) {
+            addMessage('assistant', '👋 Chat cleared! What would you like to talk about?');
+        }
+    }
+}
+
+function exportChat() {
+    if (chatHistory.length === 0) {
+        alert('No chat history to export.');
+        return;
+    }
+    
+    const chatText = chatHistory.map(msg => 
+        `${msg.role === 'user' ? 'You' : 'AI'}: ${msg.content}`
+    ).join('\n\n');
+    
+    const blob = new Blob([chatText], {type: 'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat_history_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML.replace(/\n/g, '<br>');
+}
+</script>
+{% endblock %}

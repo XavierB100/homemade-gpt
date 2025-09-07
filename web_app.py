@@ -178,6 +178,8 @@ def run_training(config):
     global training_status
     
     try:
+        print(f"🚀 Starting training with config: {config}")
+        
         training_status.update({
             'is_training': True,
             'progress': 0,
@@ -189,26 +191,34 @@ def run_training(config):
             'best_loss': float('inf')
         })
         
+        print("📦 Importing training modules...")
         # Import training modules
         import train
+        print("✅ Training modules imported")
         
         # Load and process data
+        print(f"📂 Loading data from: {config['data_path']}")
         processor = DataProcessor()
         text, metadata = processor.load_and_process_data(config['data_path'], config['data_type'])
+        print(f"✅ Data loaded: {len(text)} characters")
         
         # Build vocabulary
         processor.build_vocabulary(text)
         train_data, val_data = processor.get_train_val_split(text)
+        print(f"📚 Vocabulary built: {len(processor.chars)} characters")
         
         # Configure model
         vocab_size = len(processor.chars)
         model_config = GPTConfig.get_preset(config['model_size'], vocab_size, config['block_size'])
         model_config.dropout = config['dropout']
+        print(f"🧠 Model config: {model_config}")
         
         # Create model
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"💻 Using device: {device}")
         model = GPT(model_config)
         model.to(device)
+        print(f"✅ Model created and moved to {device}")
         
         # Training configuration
         train_config = {
@@ -234,18 +244,23 @@ def run_training(config):
         # Training loop with progress updates
         best_val_loss = float('inf')
         
+        print(f"Starting training loop for {config['max_iters']} iterations...")
+        
         for iter_num in range(config['max_iters']):
             # Update progress
             progress = int((iter_num / config['max_iters']) * 100)
             training_status.update({
                 'progress': progress,
-                'iteration': iter_num
+                'iteration': iter_num,
+                'learning_rate': 0.0  # Will be updated below
             })
             
             # Learning rate scheduling
             lr = train.get_lr(iter_num, train_config)
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
+            
+            training_status['learning_rate'] = lr
             
             # Forward pass
             X, Y = train.get_batch(train_data, config['batch_size'], config['block_size'], device)
@@ -262,21 +277,36 @@ def run_training(config):
             
             # Update loss
             current_loss = loss.item()
-            training_status['current_loss'] = current_loss
+            training_status['current_loss'] = float(current_loss)
             
-            # Periodic evaluation
-            if iter_num % (config['max_iters'] // 10) == 0 or iter_num == config['max_iters'] - 1:
+            # More frequent progress updates (every 10 iterations)
+            if iter_num % 10 == 0:
+                print(f"Iteration {iter_num}, Loss: {current_loss:.4f}, LR: {lr:.6f}")
+                socketio.emit('training_progress', {
+                    'progress': progress,
+                    'iteration': iter_num,
+                    'current_loss': float(current_loss),  # Convert to float
+                    'best_loss': float(training_status['best_loss']),  # Convert to float
+                    'lr': float(lr)  # Convert to float
+                })
+            
+            # Periodic evaluation and saving
+            eval_interval = max(1, config['max_iters'] // 10)
+            if iter_num % eval_interval == 0 or iter_num == config['max_iters'] - 1:
                 model.eval()
+                print(f"Evaluating at iteration {iter_num}...")
                 val_loss = train.estimate_loss(
-                    model, train_data, val_data, 50, 
+                    model, train_data, val_data, 10,  # Reduced from 50 to 10 for faster eval 
                     config['batch_size'], config['block_size'], 
                     device, torch.no_grad()
                 )['val']
                 model.train()
                 
+                print(f"Validation loss: {val_loss:.4f}")
+                
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    training_status['best_loss'] = best_val_loss
+                    training_status['best_loss'] = float(best_val_loss)
                     
                     # Save best model
                     model_path = f"models/{config['model_name']}.pt"
@@ -292,15 +322,16 @@ def run_training(config):
                         }
                     }
                     torch.save(checkpoint, model_path)
+                    print(f"Saved best model with val_loss: {val_loss:.4f}")
                 
-                # Emit progress update
+                # Emit detailed progress update
                 socketio.emit('training_progress', {
                     'progress': progress,
                     'iteration': iter_num,
-                    'current_loss': current_loss,
-                    'val_loss': val_loss,
-                    'best_loss': best_val_loss,
-                    'lr': lr
+                    'current_loss': float(current_loss),  # Convert to float
+                    'val_loss': float(val_loss),  # Convert to float
+                    'best_loss': float(best_val_loss),  # Convert to float
+                    'lr': float(lr)  # Convert to float
                 })
         
         # Training completed
@@ -311,7 +342,7 @@ def run_training(config):
         
         socketio.emit('training_complete', {
             'model_name': config['model_name'],
-            'final_loss': training_status['best_loss']
+            'final_loss': float(training_status['best_loss'])  # Convert to float
         })
         
     except Exception as e:
