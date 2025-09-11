@@ -595,6 +595,7 @@ function fmtTime(sec) {
     return `${h}:${m}:${s}`;
 }
 
+let __lastLoggedIter = -1;
 function updateTrainingProgress(data) {
     // Update progress bar and stats
     document.getElementById('progressBar').style.width = (data.progress || 0) + '%';
@@ -606,8 +607,12 @@ function updateTrainingProgress(data) {
     document.getElementById('elapsedTime').textContent = fmtTime(data.elapsed_sec);
     document.getElementById('etaTime').textContent = fmtTime(data.eta_sec);
 
-    // Add user-friendly log entry
+    // Add user-friendly log entry only when iteration changes
     const logs = document.getElementById('trainingLogs');
+    if (data.iteration === __lastLoggedIter) {
+        return; // avoid duplicate entries from polling and socket overlap
+    }
+    __lastLoggedIter = data.iteration;
     const logEntry = document.createElement('div');
 
     const timestamp = new Date().toLocaleTimeString();

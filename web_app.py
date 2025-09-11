@@ -415,7 +415,7 @@ def run_training(config):
                     'eta_sec': float(training_status['eta_sec']) if training_status['eta_sec'] is not None else None,
                     'iters_per_sec': float(training_status['iters_per_sec']) if training_status['iters_per_sec'] is not None else None
                 }
-                socketio.emit('training_progress', payload, broadcast=True)
+                socketio.emit('training_progress', payload)
             
             # Periodic evaluation and checkpointing every 50 iterations
             eval_interval = 50
@@ -453,7 +453,7 @@ def run_training(config):
                     'iteration': iter_num,
                     'val_loss': float(val_loss),
                     'path': latest_path
-                }, broadcast=True)
+                })
                 
                 # Save best model
                 if val_loss < best_val_loss:
@@ -470,7 +470,7 @@ def run_training(config):
                         'val_loss': float(val_loss),
                         'path': best_path,
                         'archive_path': archive_path
-                    }, broadcast=True)
+                    })
                 
                 # Emit detailed progress update
                 socketio.emit('training_progress', {
@@ -484,7 +484,7 @@ def run_training(config):
                     'elapsed_sec': float(training_status['elapsed_sec']),
                     'eta_sec': float(training_status['eta_sec']) if training_status['eta_sec'] is not None else None,
                     'iters_per_sec': float(training_status['iters_per_sec']) if training_status['iters_per_sec'] is not None else None
-                }, broadcast=True)
+                })
         
         # Training completed
         training_status.update({
