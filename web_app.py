@@ -75,7 +75,13 @@ training_status = {
     'elapsed_sec': 0.0,
     'eta_sec': None,
     'iters_per_sec': None,
-    'learning_rate': 0.0
+    'learning_rate': 0.0,
+    # Control & paths
+    'paused': False,
+    'stopped': False,
+    'latest_path': None,
+    'best_path': None,
+    'final_path': None
 }
 
 def allowed_file(filename):
@@ -286,7 +292,12 @@ def run_training(config):
             'elapsed_sec': 0.0,
             'eta_sec': None,
             'iters_per_sec': None,
-            'learning_rate': 0.0
+            'learning_rate': 0.0,
+            'paused': False,
+            'stopped': False,
+            'latest_path': None,
+            'best_path': None,
+            'final_path': None
         })
         
         print("📦 Importing training modules...")
@@ -324,8 +335,8 @@ def run_training(config):
         model.to(device)
         print(f"✅ Model created and moved to {device}")
         socketio.emit('training_log', {'message': '✅ Neural network model ready for training'})
-        
-        # Training configuration
+
+        # Initialize optimizer
         train_config = {
             'learning_rate': config['learning_rate'],
             'max_iters': config['max_iters'],
@@ -337,14 +348,34 @@ def run_training(config):
             'grad_clip': 1.0,
             'weight_decay': 1e-1,
         }
-        
-        # Initialize optimizer
+
         optimizer = model.configure_optimizers(
             train_config['weight_decay'], 
             train_config['learning_rate'], 
             (train_config['beta1'], train_config['beta2']), 
             device.split(':')[0]
         )
+
+        # Optional resume from latest checkpoint
+        start_iter = 0
+        if config.get('resume', False):
+            latest_path = f"models/{config['model_name']}_latest.pt"
+            if os.path.exists(latest_path):
+                try:
+                    ckpt = torch.load(latest_path, map_location=device)
+                    model.load_state_dict(ckpt['model'])
+                    optimizer.load_state_dict(ckpt.get('optimizer', optimizer.state_dict())) if 'optimizer' in ckpt else None
+                    start_iter = int(ckpt.get('iter_num', 0)) + 1
+                    best_val_loss = float(ckpt.get('val_loss', float('inf')))
+                    training_status['best_loss'] = None if not math.isfinite(best_val_loss) else best_val_loss
+                    training_status['latest_path'] = latest_path
+                    socketio.emit('training_log', {'message': f'🔄 Resumed from latest checkpoint at step {start_iter}'})
+                except Exception as e:
+                    socketio.emit('training_log', {'message': f'⚠️ Failed to resume: {e}. Starting fresh.'})
+
+        # Progress/Eval interval
+        progress_interval = int(config.get('progress_interval', 50))
+        eval_interval = progress_interval
         
         # Training loop with progress updates
         best_val_loss = float('inf')
@@ -357,7 +388,8 @@ def run_training(config):
         last_tick = start_time
         smoothed_ips = None
         
-        for iter_num in range(config['max_iters']):
+        best_checkpoint = None
+        for iter_num in range(start_iter, config['max_iters']):
             # Update progress and timing
             progress = int((iter_num / config['max_iters']) * 100)
             now = time.time()
@@ -377,6 +409,13 @@ def run_training(config):
                 'iters_per_sec': float(smoothed_ips)
             })
             
+            # Honor pause/stop controls
+            while training_status.get('paused') and not training_status.get('stopped'):
+                time.sleep(0.25)
+            if training_status.get('stopped'):
+                socketio.emit('training_log', {'message': '🛑 Training stopped by user'})
+                break
+
             # Learning rate scheduling
             lr = train.get_lr(iter_num, train_config)
             for param_group in optimizer.param_groups:
@@ -401,8 +440,8 @@ def run_training(config):
             current_loss = loss.item()
             training_status['current_loss'] = float(current_loss)
             
-            # Progress updates every 50 iterations
-            if iter_num % 50 == 0:
+            # Progress updates at configured interval
+            if iter_num % progress_interval == 0:
                 print(f"Iteration {iter_num}, Loss: {current_loss:.4f}, LR: {lr:.6f}")
                 payload = {
                     'progress': progress,
@@ -417,8 +456,7 @@ def run_training(config):
                 }
                 socketio.emit('training_progress', payload)
             
-            # Periodic evaluation and checkpointing every 50 iterations
-            eval_interval = 50
+            # Periodic evaluation and checkpointing at configured interval
             if iter_num % eval_interval == 0 or iter_num == config['max_iters'] - 1:
                 model.eval()
                 print(f"Evaluating at iteration {iter_num}...")
@@ -445,9 +483,11 @@ def run_training(config):
                         'itos': processor.itos
                     },
                     'iter_num': iter_num,
-                    'val_loss': float(val_loss)
+'val_loss': float(val_loss),
+                    'optimizer': optimizer.state_dict()
                 }
                 torch.save(checkpoint, latest_path)
+                training_status['latest_path'] = latest_path
                 socketio.emit('checkpoint_saved', {
                     'type': 'latest',
                     'iteration': iter_num,
@@ -461,15 +501,14 @@ def run_training(config):
                     training_status['best_loss'] = float(best_val_loss)
                     best_path = f"models/{config['model_name']}_best.pt"
                     torch.save(checkpoint, best_path)
-                    archive_path = f"models/{config['model_name']}_best_iter_{iter_num}.pt"
-                    torch.save(checkpoint, archive_path)
+                    best_checkpoint = checkpoint
+                    training_status['best_path'] = best_path
                     print(f"Saved best model with val_loss: {val_loss:.4f}")
                     socketio.emit('checkpoint_saved', {
                         'type': 'best',
                         'iteration': iter_num,
                         'val_loss': float(val_loss),
-                        'path': best_path,
-                        'archive_path': archive_path
+                        'path': best_path
                     })
                 
                 # Emit detailed progress update
@@ -487,6 +526,33 @@ def run_training(config):
                 })
         
         # Training completed
+        # Save final model with original name (best checkpoint if available, else latest/current)
+        final_path = f"models/{config['model_name']}.pt"
+        if best_checkpoint is not None:
+            torch.save(best_checkpoint, final_path)
+        elif training_status.get('latest_path') and os.path.exists(training_status['latest_path']):
+            try:
+                ck = torch.load(training_status['latest_path'], map_location='cpu')
+                torch.save(ck, final_path)
+            except Exception:
+                # fall back to current model state
+                torch.save({'model': model.state_dict(), 'model_args': model_config, 'train_config': train_config, 'vocab_size': vocab_size, 'processor': {'chars': processor.chars,'stoi': processor.stoi,'itos': processor.itos}}, final_path)
+        else:
+            torch.save({'model': model.state_dict(), 'model_args': model_config, 'train_config': train_config, 'vocab_size': vocab_size, 'processor': {'chars': processor.chars,'stoi': processor.stoi,'itos': processor.itos}}, final_path)
+        training_status['final_path'] = final_path
+
+        # Generate sample text from best model
+        try:
+            model.eval()
+            if best_checkpoint is not None:
+                model.load_state_dict(best_checkpoint['model'])
+            context = torch.zeros((1, 1), dtype=torch.long, device=device)
+            with torch.no_grad():
+                generated = model.generate(context, max_new_tokens=200, temperature=0.8, top_k=50)
+                generated_text = processor.decode(generated[0].tolist())
+        except Exception as e:
+            generated_text = f"Sample generation failed: {e}"
+
         training_status.update({
             'is_training': False,
             'progress': 100
@@ -494,7 +560,12 @@ def run_training(config):
         
         socketio.emit('training_complete', {
             'model_name': config['model_name'],
-            'final_loss': float(training_status['best_loss'])  # Convert to float
+            'final_loss': float(training_status['best_loss']) if training_status['best_loss'] is not None else None,
+            'final_model_path': final_path,
+            'best_model_path': training_status.get('best_path'),
+            'latest_model_path': training_status.get('latest_path'),
+            'elapsed_sec': training_status.get('elapsed_sec'),
+            'sample_text': generated_text
         })
         
     except Exception as e:
@@ -533,7 +604,9 @@ def start_training():
         'batch_size': int(data.get('batch_size', 32)),
         'max_iters': int(data['max_iters']),
         'learning_rate': float(data.get('learning_rate', 3e-4)),
-        'dropout': float(data.get('dropout', 0.1))
+'dropout': float(data.get('dropout', 0.1)),
+        'progress_interval': int(data.get('progress_interval', 50)),
+        'resume': bool(data.get('resume', False))
     }
     
     # Start training in background thread
@@ -581,6 +654,24 @@ def chat_api():
             'success': False,
             'error': str(e)
         })
+
+@app.route('/pause_training', methods=['POST'])
+def pause_training():
+    training_status['paused'] = True
+    socketio.emit('training_log', {'message': '⏸️ Training paused'})
+    return jsonify({'success': True})
+
+@app.route('/resume_training', methods=['POST'])
+def resume_training():
+    training_status['paused'] = False
+    socketio.emit('training_log', {'message': '▶️ Training resumed'})
+    return jsonify({'success': True})
+
+@app.route('/stop_training', methods=['POST'])
+def stop_training():
+    training_status['stopped'] = True
+    socketio.emit('training_log', {'message': '🛑 Stopping training...'})
+    return jsonify({'success': True})
 
 @app.route('/delete_model/<model_name>')
 def delete_model(model_name):

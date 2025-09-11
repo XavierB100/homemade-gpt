@@ -176,11 +176,32 @@
                         </div>
                         
                         <!-- Training Iterations -->
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="maxIters" class="form-label">Training Iterations</label>
                             <input type="number" class="form-control" id="maxIters" 
                                    value="2000" min="100" max="20000" required>
                             <div class="form-text">More iterations = better quality (slower)</div>
+                        </div>
+                        
+                        <!-- Eval/Progress Interval -->
+                        <div class="col-md-4 mb-3">
+                            <label for="progressInterval" class="form-label">Progress/Eval Interval</label>
+                            <select class="form-select" id="progressInterval">
+                                <option value="25">25 steps</option>
+                                <option value="50" selected>50 steps</option>
+                                <option value="100">100 steps</option>
+                            </select>
+                            <div class="form-text">How often to evaluate and save checkpoints</div>
+                        </div>
+                        
+                        <!-- Resume from latest -->
+                        <div class="col-md-4 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="resumeLatest">
+                                <label class="form-check-label" for="resumeLatest">
+                                    Resume from latest checkpoint
+                                </label>
+                            </div>
                         </div>
                         
                         <!-- Learning Rate -->
@@ -236,9 +257,18 @@
                     </div>
                     
                     <!-- Start Training Button -->
-                    <div class="text-center mt-4">
+                    <div class="text-center mt-4 d-flex gap-2 justify-content-center">
                         <button type="submit" class="btn btn-gradient btn-lg" id="startTrainingBtn" disabled>
                             <i class="bi bi-play-fill"></i> Start Training
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-lg" id="pauseBtn" disabled>
+                            ⏸️ Pause
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-lg" id="resumeBtn" disabled>
+                            ▶️ Resume
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-lg" id="stopBtn" disabled>
+                            🛑 Stop
                         </button>
                     </div>
                 </form>
@@ -515,7 +545,9 @@ document.getElementById('trainingForm').addEventListener('submit', function(e) {
         learning_rate: parseFloat(document.getElementById('learningRate').value),
         block_size: parseInt(document.getElementById('blockSize').value),
         batch_size: parseInt(document.getElementById('batchSize').value),
-        dropout: parseFloat(document.getElementById('dropout').value)
+        dropout: parseFloat(document.getElementById('dropout').value),
+        progress_interval: parseInt(document.getElementById('progressInterval').value),
+        resume: document.getElementById('resumeLatest').checked
     };
     
     startTraining(config);
@@ -545,6 +577,9 @@ function startTraining(config) {
 function showTrainingProgress() {
     document.getElementById('trainingProgress').classList.add('active');
     document.getElementById('startTrainingBtn').disabled = true;
+    document.getElementById('pauseBtn').disabled = false;
+    document.getElementById('resumeBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = false;
     
     // Initialize progress display
     document.getElementById('progressBar').style.width = '0%';
@@ -606,6 +641,22 @@ function startStatusPolling(shouldPollFn, intervalMs = 10000) {
 }
 // default start if no socket yet
 startStatusPolling(() => true, 10000);
+
+// Control buttons
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => {
+    fetch('/pause_training', {method: 'POST'});
+});
+const resumeBtn = document.getElementById('resumeBtn');
+resumeBtn.addEventListener('click', () => {
+    fetch('/resume_training', {method: 'POST'});
+});
+const stopBtn = document.getElementById('stopBtn');
+stopBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to stop training?')) {
+        fetch('/stop_training', {method: 'POST'});
+    }
+});
 
 function fmtNum(n, digits=4, fallback='—') {
     return Number.isFinite(n) ? n.toFixed(digits) : fallback;
@@ -682,8 +733,31 @@ function onTrainingComplete(data) {
     
     const logs = document.getElementById('trainingLogs');
     const logEntry = document.createElement('div');
-    logEntry.innerHTML = `<strong style="color: #00ff00;">🎉 Training completed! Model "${data.model_name}" saved with final loss: ${data.final_loss.toFixed(4)}</strong>`;
+    const finalLossText = (data.final_loss !== null && data.final_loss !== undefined) ? data.final_loss.toFixed(4) : '—';
+    logEntry.innerHTML = `<strong style=\"color: #00ff00;\">🎉 Training completed! Model \"${data.model_name}\" saved with final loss: ${finalLossText}</strong>`;
     logs.appendChild(logEntry);
+    if (data.final_model_path) {
+        const p = document.createElement('div');
+        p.innerHTML = `📁 Final model: <code>${data.final_model_path}</code>`;
+        logs.appendChild(p);
+    }
+    if (data.best_model_path) {
+        const p = document.createElement('div');
+        p.innerHTML = `🏆 Best checkpoint: <code>${data.best_model_path}</code>`;
+        logs.appendChild(p);
+    }
+    if (data.latest_model_path) {
+        const p = document.createElement('div');
+        p.innerHTML = `📝 Latest checkpoint: <code>${data.latest_model_path}</code>`;
+        logs.appendChild(p);
+    }
+    if (data.sample_text) {
+        const sample = document.createElement('pre');
+        sample.style.whiteSpace = 'pre-wrap';
+        sample.style.marginTop = '10px';
+        sample.textContent = `--- Sample generation ---\n${data.sample_text}`;
+        logs.appendChild(sample);
+    }
     logs.scrollTop = logs.scrollHeight;
     
     // Show success message and redirect option
