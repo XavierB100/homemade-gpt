@@ -271,28 +271,40 @@
                 
                 <!-- Training Stats -->
                 <div class="row mb-3">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="text-center">
                             <div class="h4 mb-0" id="currentIteration" style="color: var(--text-primary);">0</div>
                             <small style="color: var(--text-muted);">Iteration</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="currentLoss" style="color: var(--text-primary);">0.000</div>
+                            <div class="h4 mb-0" id="currentLoss" style="color: var(--text-primary);">—</div>
                             <small style="color: var(--text-muted);">Current Loss</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="bestLoss" style="color: var(--text-primary);">0.000</div>
+                            <div class="h4 mb-0" id="bestLoss" style="color: var(--text-primary);">—</div>
                             <small style="color: var(--text-muted);">Best Loss</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="text-center">
-                            <div class="h4 mb-0" id="learningRateDisplay" style="color: var(--text-primary);">0.000</div>
+                            <div class="h4 mb-0" id="learningRateDisplay" style="color: var(--text-primary);">—</div>
                             <small style="color: var(--text-muted);">Learning Rate</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-center">
+                            <div class="h4 mb-0" id="elapsedTime" style="color: var(--text-primary);">00:00:00</div>
+                            <small style="color: var(--text-muted);">Elapsed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-center">
+                            <div class="h4 mb-0" id="etaTime" style="color: var(--text-primary);">—</div>
+                            <small style="color: var(--text-muted);">ETA</small>
                         </div>
                     </div>
                 </div>
@@ -354,7 +366,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     socket.on('training_progress', function(data) {
-        updateTrainingProgress(data);
+        try {
+            console.log('Training progress received:', data);
+            updateTrainingProgress(data);
+        } catch (e) {
+            console.error('Error updating training progress:', e, data);
+        }
     });
     
     socket.on('training_complete', function(data) {
@@ -363,6 +380,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     socket.on('training_error', function(data) {
         onTrainingError(data);
+    });
+    
+    socket.on('training_log', function(data) {
+        addTrainingLogMessage(data.message);
     });
 });
 
@@ -504,26 +525,119 @@ function showTrainingProgress() {
     document.getElementById('trainingProgress').classList.add('active');
     document.getElementById('startTrainingBtn').disabled = true;
     
+    // Initialize progress display
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressText').textContent = '0%';
+    document.getElementById('currentIteration').textContent = '0';
+    document.getElementById('currentLoss').textContent = '—';
+    document.getElementById('bestLoss').textContent = '—';
+    document.getElementById('learningRateDisplay').textContent = '—';
+    document.getElementById('elapsedTime').textContent = '00:00:00';
+    document.getElementById('etaTime').textContent = '—';
+    
+    // Clear and add initialization message to logs
+    const logs = document.getElementById('trainingLogs');
+    logs.innerHTML = '';
+    const initEntry = document.createElement('div');
+    initEntry.innerHTML = `<span style=\"color: #10b981;\">[${new Date().toLocaleTimeString()}]</span> <strong style=\"color: #3b82f6;\">🚀 Initializing training system...</strong>`;
+    logs.appendChild(initEntry);
+    
+    const dataEntry = document.createElement('div');
+    dataEntry.innerHTML = `<span style=\"color: #10b981;\">[${new Date().toLocaleTimeString()}]</span> 📂 Loading and processing training data...`;
+    logs.appendChild(dataEntry);
+    
+    const modelEntry = document.createElement('div');
+    modelEntry.innerHTML = `<span style=\"color: #10b981;\">[${new Date().toLocaleTimeString()}]</span> 🧠 Building neural network model...`;
+    logs.appendChild(modelEntry);
+    
     // Scroll to progress section
     document.getElementById('trainingProgress').scrollIntoView({ 
         behavior: 'smooth' 
     });
 }
 
+// Polling fallback in case Socket.IO events are delayed
+let statusPoller = null;
+function startStatusPolling() {
+    if (statusPoller) return;
+    statusPoller = setInterval(() => {
+        fetch('/training_status')
+            .then(r => r.json())
+            .then(s => {
+                updateTrainingProgress({
+                    progress: s.progress,
+                    iteration: s.iteration,
+                    max_iterations: s.max_iterations,
+                    current_loss: s.current_loss,
+                    best_loss: s.best_loss,
+                    lr: s.learning_rate,
+                    elapsed_sec: s.elapsed_sec,
+                    eta_sec: s.eta_sec
+                });
+            })
+            .catch(() => {});
+    }, 2000);
+}
+startStatusPolling();
+
+function fmtNum(n, digits=4, fallback='—') {
+    return Number.isFinite(n) ? n.toFixed(digits) : fallback;
+}
+function fmtExp(n, digits=2, fallback='—') {
+    return Number.isFinite(n) ? n.toExponential(digits) : fallback;
+}
+function fmtTime(sec) {
+    if (!Number.isFinite(sec)) return '—';
+    sec = Math.max(0, Math.floor(sec));
+    const h = String(Math.floor(sec/3600)).padStart(2,'0');
+    const m = String(Math.floor((sec%3600)/60)).padStart(2,'0');
+    const s = String(sec%60).padStart(2,'0');
+    return `${h}:${m}:${s}`;
+}
+
 function updateTrainingProgress(data) {
-    document.getElementById('progressBar').style.width = data.progress + '%';
-    document.getElementById('progressText').textContent = data.progress + '%';
-    document.getElementById('currentIteration').textContent = data.iteration;
-    document.getElementById('currentLoss').textContent = data.current_loss.toFixed(4);
-    document.getElementById('bestLoss').textContent = data.best_loss.toFixed(4);
-    document.getElementById('learningRateDisplay').textContent = data.lr.toExponential(2);
-    
-    // Add log entry
+    // Update progress bar and stats
+    document.getElementById('progressBar').style.width = (data.progress || 0) + '%';
+    document.getElementById('progressText').textContent = (data.progress || 0) + '%';
+    document.getElementById('currentIteration').textContent = data.iteration ?? 0;
+    document.getElementById('currentLoss').textContent = fmtNum(data.current_loss);
+    document.getElementById('bestLoss').textContent = fmtNum(data.best_loss);
+    document.getElementById('learningRateDisplay').textContent = fmtExp(data.lr);
+    document.getElementById('elapsedTime').textContent = fmtTime(data.elapsed_sec);
+    document.getElementById('etaTime').textContent = fmtTime(data.eta_sec);
+
+    // Add user-friendly log entry
     const logs = document.getElementById('trainingLogs');
     const logEntry = document.createElement('div');
-    logEntry.textContent = `[${new Date().toLocaleTimeString()}] Iteration ${data.iteration}: Loss ${data.current_loss.toFixed(4)}, Val Loss ${data.val_loss.toFixed(4)}`;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const improving = Number.isFinite(data.best_loss) && Number.isFinite(data.current_loss) && data.current_loss <= data.best_loss;
+    const lossImprovement = improving ? "📈 Improving!" : "📊 Learning...";
+    const valLossText = Number.isFinite(data.val_loss) ? `, Validation: ${fmtNum(data.val_loss)}` : "";
+
+    logEntry.innerHTML = `<span style=\"color: #10b981;\">[${timestamp}]</span> Step <strong>${data.iteration}</strong>/${data.max_iterations || '?'} - Loss: <strong style=\"color: #f59e0b;\">${fmtNum(data.current_loss)}</strong>${valLossText} ${lossImprovement}`;
+
     logs.appendChild(logEntry);
     logs.scrollTop = logs.scrollHeight;
+
+    // Remove old log entries if too many (keep last 200)
+    while (logs.children.length > 200) {
+        logs.removeChild(logs.firstChild);
+    }
+}
+
+// Handle checkpoint events
+if (socket) {
+    socket.on('checkpoint_saved', function(data) {
+        const logs = document.getElementById('trainingLogs');
+        const entry = document.createElement('div');
+        const ts = new Date().toLocaleTimeString();
+        const label = data.type === 'best' ? '💾 Best checkpoint' : '📝 Latest checkpoint';
+        const val = Number.isFinite(data.val_loss) ? data.val_loss.toFixed(4) : '—';
+        entry.innerHTML = `<span style=\"color: #10b981;\">[${ts}]</span> ${label} saved at step <strong>${data.iteration}</strong> (val_loss=${val}) → <code>${data.path}</code>`;
+        logs.appendChild(entry);
+        logs.scrollTop = logs.scrollHeight;
+    });
 }
 
 function onTrainingComplete(data) {
@@ -555,6 +669,20 @@ function onTrainingError(data) {
     logs.scrollTop = logs.scrollHeight;
     
     document.getElementById('startTrainingBtn').disabled = false;
+}
+
+function addTrainingLogMessage(message) {
+    const logs = document.getElementById('trainingLogs');
+    const logEntry = document.createElement('div');
+    const timestamp = new Date().toLocaleTimeString();
+    logEntry.innerHTML = `<span style="color: #10b981;">[${timestamp}]</span> ${message}`;
+    logs.appendChild(logEntry);
+    logs.scrollTop = logs.scrollHeight;
+    
+    // Remove old log entries if too many (keep last 50)
+    while (logs.children.length > 50) {
+        logs.removeChild(logs.firstChild);
+    }
 }
 </script>
 {% endblock %}

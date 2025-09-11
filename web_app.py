@@ -8,6 +8,7 @@ import os
 import json
 import threading
 import time
+import math
 from datetime import datetime
 from pathlib import Path
 import torch
@@ -56,19 +57,25 @@ Path('uploads').mkdir(exist_ok=True)
 Path('models').mkdir(exist_ok=True)
 Path('logs').mkdir(exist_ok=True)
 
-# Initialize SocketIO for real-time updates
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize SocketIO for real-time updates (threading mode improves reliability on Windows)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # Global variables for training status
 training_status = {
     'is_training': False,
     'progress': 0,
-    'current_loss': 0.0,
-    'best_loss': float('inf'),
+    'current_loss': None,
+    'best_loss': None,  # becomes a float after first evaluation
+    'last_val_loss': None,
     'iteration': 0,
     'max_iterations': 0,
     'model_name': '',
-    'log_messages': []
+    'log_messages': [],
+    'start_time': None,
+    'elapsed_sec': 0.0,
+    'eta_sec': None,
+    'iters_per_sec': None,
+    'learning_rate': 0.0
 }
 
 def allowed_file(filename):
@@ -272,20 +279,30 @@ def run_training(config):
             'max_iterations': config['max_iters'],
             'model_name': config['model_name'],
             'log_messages': [],
-            'current_loss': 0.0,
-            'best_loss': float('inf')
+            'current_loss': None,
+            'best_loss': None,
+            'last_val_loss': None,
+            'start_time': time.time(),
+            'elapsed_sec': 0.0,
+            'eta_sec': None,
+            'iters_per_sec': None,
+            'learning_rate': 0.0
         })
         
         print("📦 Importing training modules...")
+        socketio.emit('training_log', {'message': '📦 Importing AI training modules...'})
         # Import training modules
         import src.training.train as train
         print("✅ Training modules imported")
+        socketio.emit('training_log', {'message': '✅ AI training modules loaded successfully'})
         
         # Load and process data
         print(f"📂 Loading data from: {config['data_path']}")
+        socketio.emit('training_log', {'message': '📂 Loading your training data...'})
         processor = DataProcessor()
         text, metadata = processor.load_and_process_data(config['data_path'], config['data_type'])
         print(f"✅ Data loaded: {len(text)} characters")
+        socketio.emit('training_log', {'message': f'✅ Successfully loaded {len(text):,} characters of text'})
         
         # Build vocabulary
         processor.build_vocabulary(text)
@@ -297,13 +314,16 @@ def run_training(config):
         model_config = GPTConfig.get_preset(config['model_size'], vocab_size, config['block_size'])
         model_config.dropout = config['dropout']
         print(f"🧠 Model config: {model_config}")
+        socketio.emit('training_log', {'message': f'🧠 Building {config["model_size"]} model with {vocab_size} vocabulary...'})
         
         # Create model
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"💻 Using device: {device}")
+        socketio.emit('training_log', {'message': f'💻 Using {device.upper()} for training'})
         model = GPT(model_config)
         model.to(device)
         print(f"✅ Model created and moved to {device}")
+        socketio.emit('training_log', {'message': '✅ Neural network model ready for training'})
         
         # Training configuration
         train_config = {
@@ -330,14 +350,31 @@ def run_training(config):
         best_val_loss = float('inf')
         
         print(f"Starting training loop for {config['max_iters']} iterations...")
+        socketio.emit('training_log', {'message': f'🎯 Starting training for {config["max_iters"]} iterations...'})
+        
+        # Timing/ETA helpers
+        start_time = training_status['start_time']
+        last_tick = start_time
+        smoothed_ips = None
         
         for iter_num in range(config['max_iters']):
-            # Update progress
+            # Update progress and timing
             progress = int((iter_num / config['max_iters']) * 100)
+            now = time.time()
+            elapsed = now - start_time
+            instant_ips = 1.0 / max(now - last_tick, 1e-6)
+            smoothed_ips = instant_ips if smoothed_ips is None else 0.9 * smoothed_ips + 0.1 * instant_ips
+            last_tick = now
+            remaining_iters = max(config['max_iters'] - max(iter_num, 1), 1)
+            eta = remaining_iters / max(smoothed_ips, 1e-6)
+            
             training_status.update({
                 'progress': progress,
                 'iteration': iter_num,
-                'learning_rate': 0.0  # Will be updated below
+                'learning_rate': 0.0,  # Will be updated below
+                'elapsed_sec': float(elapsed),
+                'eta_sec': float(eta),
+                'iters_per_sec': float(smoothed_ips)
             })
             
             # Learning rate scheduling
@@ -364,60 +401,90 @@ def run_training(config):
             current_loss = loss.item()
             training_status['current_loss'] = float(current_loss)
             
-            # More frequent progress updates (every 10 iterations)
-            if iter_num % 10 == 0:
+            # Progress updates every 50 iterations
+            if iter_num % 50 == 0:
                 print(f"Iteration {iter_num}, Loss: {current_loss:.4f}, LR: {lr:.6f}")
-                socketio.emit('training_progress', {
+                payload = {
                     'progress': progress,
                     'iteration': iter_num,
-                    'current_loss': float(current_loss),  # Convert to float
-                    'best_loss': float(training_status['best_loss']),  # Convert to float
-                    'lr': float(lr)  # Convert to float
-                })
+                    'max_iterations': config['max_iters'],
+                    'current_loss': float(current_loss),
+                    'best_loss': float(best_val_loss) if math.isfinite(best_val_loss) else None,
+                    'lr': float(lr),
+                    'elapsed_sec': float(training_status['elapsed_sec']),
+                    'eta_sec': float(training_status['eta_sec']) if training_status['eta_sec'] is not None else None,
+                    'iters_per_sec': float(training_status['iters_per_sec']) if training_status['iters_per_sec'] is not None else None
+                }
+                socketio.emit('training_progress', payload, broadcast=True)
             
-            # Periodic evaluation and saving
-            eval_interval = max(1, config['max_iters'] // 10)
+            # Periodic evaluation and checkpointing every 50 iterations
+            eval_interval = 50
             if iter_num % eval_interval == 0 or iter_num == config['max_iters'] - 1:
                 model.eval()
                 print(f"Evaluating at iteration {iter_num}...")
                 val_loss = train.estimate_loss(
-                    model, train_data, val_data, 10,  # Reduced from 50 to 10 for faster eval 
-                    config['batch_size'], config['block_size'], 
+                    model, train_data, val_data, 10,
+                    config['batch_size'], config['block_size'],
                     device, torch.no_grad()
                 )['val']
                 model.train()
                 
+                training_status['last_val_loss'] = float(val_loss)
                 print(f"Validation loss: {val_loss:.4f}")
                 
+                # Always save latest checkpoint
+                latest_path = f"models/{config['model_name']}_latest.pt"
+                checkpoint = {
+                    'model': model.state_dict(),
+                    'model_args': model_config,
+                    'train_config': train_config,
+                    'vocab_size': vocab_size,
+                    'processor': {
+                        'chars': processor.chars,
+                        'stoi': processor.stoi,
+                        'itos': processor.itos
+                    },
+                    'iter_num': iter_num,
+                    'val_loss': float(val_loss)
+                }
+                torch.save(checkpoint, latest_path)
+                socketio.emit('checkpoint_saved', {
+                    'type': 'latest',
+                    'iteration': iter_num,
+                    'val_loss': float(val_loss),
+                    'path': latest_path
+                }, broadcast=True)
+                
+                # Save best model
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     training_status['best_loss'] = float(best_val_loss)
-                    
-                    # Save best model
-                    model_path = f"models/{config['model_name']}.pt"
-                    checkpoint = {
-                        'model': model.state_dict(),
-                        'model_args': model_config,
-                        'train_config': train_config,
-                        'vocab_size': vocab_size,
-                        'processor': {
-                            'chars': processor.chars,
-                            'stoi': processor.stoi,
-                            'itos': processor.itos
-                        }
-                    }
-                    torch.save(checkpoint, model_path)
+                    best_path = f"models/{config['model_name']}_best.pt"
+                    torch.save(checkpoint, best_path)
+                    archive_path = f"models/{config['model_name']}_best_iter_{iter_num}.pt"
+                    torch.save(checkpoint, archive_path)
                     print(f"Saved best model with val_loss: {val_loss:.4f}")
+                    socketio.emit('checkpoint_saved', {
+                        'type': 'best',
+                        'iteration': iter_num,
+                        'val_loss': float(val_loss),
+                        'path': best_path,
+                        'archive_path': archive_path
+                    }, broadcast=True)
                 
                 # Emit detailed progress update
                 socketio.emit('training_progress', {
                     'progress': progress,
                     'iteration': iter_num,
-                    'current_loss': float(current_loss),  # Convert to float
-                    'val_loss': float(val_loss),  # Convert to float
-                    'best_loss': float(best_val_loss),  # Convert to float
-                    'lr': float(lr)  # Convert to float
-                })
+                    'max_iterations': config['max_iters'],
+                    'current_loss': float(current_loss),
+                    'val_loss': float(val_loss),
+                    'best_loss': float(best_val_loss) if math.isfinite(best_val_loss) else None,
+                    'lr': float(lr),
+                    'elapsed_sec': float(training_status['elapsed_sec']),
+                    'eta_sec': float(training_status['eta_sec']) if training_status['eta_sec'] is not None else None,
+                    'iters_per_sec': float(training_status['iters_per_sec']) if training_status['iters_per_sec'] is not None else None
+                }, broadcast=True)
         
         # Training completed
         training_status.update({
